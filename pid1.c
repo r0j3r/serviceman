@@ -20,5 +20,5 @@ main()
     setsid();
     setpgid( 0, 0);   
 
-    return execve("/bin/serv", (char *[]) {"serv", 0}, (char *[]) { 0 });
+    return execve("/sbin/serv", (char *[]) {"serv", 0}, (char *[]) { 0 });
 }
