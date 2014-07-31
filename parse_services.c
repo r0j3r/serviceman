@@ -108,8 +108,9 @@ staging_buffer_alloc(int size)
 {
     if (staging_buffer_pos < staging_buffer_size)
     {
+        void * ret = staging_buffer + staging_buffer_pos;
         staging_buffer_pos += size;
-        return staging_buffer + staging_buffer_pos;
+        return ret;
     }
     return 0;
 }
@@ -278,20 +279,20 @@ next_tok()
         switch(tok_state)
         {
         case START:
-            switch(c)
+            switch(char_lookahead)
             {
             case 0:
                 return END_OF_FILE; 
             case '\n':
                 return NEWLINE;
             case ' ':
-                c = next_char();
+                char_lookahead = next_char();
             default:
-                lex_buff[lex_pos++] = c;
+                lex_buff[lex_pos++] = char_lookahead;
                 tok_state = GOT_STRING;
             }
         case GOT_STRING:
-            switch(c)
+            switch(char_lookahead)
             {
             case 0:
             case ' ':
@@ -300,13 +301,13 @@ next_tok()
                 return find_token(lexeme);
                 break;
             default:
-                lex_buff[lex_pos++] = c;  
+                lex_buff[lex_pos++] = char_lookahead;  
                 break;
             }
         default:
             break;
         }
-        c = next_char(); 
+        char_lookahead = next_char(); 
     }
     return END_OF_FILE;
 }
