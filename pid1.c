@@ -13,7 +13,7 @@ main()
     sigfillset(&set);
     sigprocmask(SIG_BLOCK, &set, 0);
 
-    if (fork()) for(;;) wait(&status);
+    if (fork()) for(;;) waitpid(-1, &status, 0);
    
     sigprocmask(SIG_UNBLOCK, &set, 0);
 
