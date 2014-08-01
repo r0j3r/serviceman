@@ -21,9 +21,10 @@ enum token
     END_OF_FILE
 };
 
-int parse_def_file(char * filename);
-int parse_def(char * buff);
-int parse_keepalive_options(enum token t);
+int parse_keepalive_options(void);
+struct packet * parse_def(char * buff);
+struct packet * parse_def_file(char * filename);
+int next_char(void);
 
 int 
 get_defs(const char * dirname)
@@ -60,7 +61,7 @@ enum token token_lookahead;
 
 enum token next_tok(void);
 
-int
+struct packet *
 parse_def_file(char * filename)
 {
     int fd;
@@ -69,13 +70,14 @@ parse_def_file(char * filename)
 
     fd = open(filename, O_RDONLY);
     if (fd < 0) 
-        return -1;
+        return 0;
     ret = fstat(fd, &stat_buf);
     if (ret < 0) goto fail;
     if (stat_buf.st_size > sizeof(buff)) goto fail;
     ret = read(fd, buff, sizeof(buff));
     if (ret < 0) goto fail;
-    parse_def(buff);
+    close(fd);
+    return parse_def(buff);
 fail:
     close(fd);
     return 0;
@@ -123,15 +125,15 @@ get_offset(unsigned char * addr)
     return 0;
 }
 
-int
+struct packet *
 parse_def(char * buff)
 {
     struct packet * packet; 
     int p_args[256];
     int p_argc_count = 0;
 
-    char * p_args_staging;
-    char * string_tab_staging;
+    unsigned char * p_args_staging;
+    unsigned char * string_tab_staging;
 
     staging_buff_init();
     packet = (struct packet *)staging_buffer;
@@ -171,7 +173,7 @@ parse_def(char * buff)
             p_args_staging = staging_buffer_alloc(sizeof(int) * p_argc_count);
             if (!p_args_staging)
             {
-                return -1;
+                return 0;
             }
             memcpy(p_args_staging, p_args, sizeof(int) * p_argc_count);
             packet->program_args = get_offset(p_args_staging);  
@@ -186,7 +188,7 @@ parse_def(char * buff)
     memcpy(string_tab_staging, lex_buff, lex_pos);
     packet->stringtab_offset = get_offset(string_tab_staging); 
     packet->packet_size = staging_buffer_pos;
-    return 0;   
+    return packet;   
 }
 
 int
@@ -231,7 +233,7 @@ parse_keepalive_options(void)
 }
 
 int
-next_char()
+next_char(void)
 {
     if (pos >= sizeof(buff)) return 0;
     return buff[pos++];
@@ -287,6 +289,7 @@ next_tok()
                 return NEWLINE;
             case ' ':
                 char_lookahead = next_char();
+                break;  
             default:
                 lex_buff[lex_pos++] = char_lookahead;
                 tok_state = GOT_STRING;
