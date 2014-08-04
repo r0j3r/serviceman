@@ -1,4 +1,6 @@
 #include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 unsigned char sigchld_flag = 0;
 
@@ -19,11 +21,14 @@ unsigned char running = 1;
 int
 got_sigchld()
 {
-    return sigchld_flag == 0;
+    return sigchld_flag == 1;
 }
 
 
 struct service * serv[1 << 10]; //array of dummy nodes
+
+struct service * remove_service(pid_t);
+int insert_service(struct service *);
 
 int
 spawn(struct service * s)
@@ -32,23 +37,25 @@ spawn(struct service * s)
 
     child_id = fork(); 
     if (child_id != 0) return child_id;
-    else execve(s->filename, *(s->argv), 0);
+    else execve(s->filename, s->argv, 0);
     return 0;
 }
 
 int 
 process_child_exit(pid_t child_id, int status)
 {
+    struct service * service;
+
     //get service using child_id
-    service = remove_service(); 
+    service = remove_service(child_id); 
     if (service->keepalive)
     {
         if (service->restart_count < service->restart_limit)
         {
-            if (spawn() == 0)
+            if (spawn(service) == 0)
             {
                 service->restart_count += 1;
-                insert_service();
+                insert_service(service);
             }
             else
             {
@@ -62,30 +69,13 @@ process_child_exit(pid_t child_id, int status)
 int
 parse_payload()
 {
-    l = next_tok();
-    switch(l->tag)
-    {
-    case t_filename
-    case t_argc
-    case t_argv
-    case t_keepalive
-    case t_restart_limit
-    }
+    return 0;
 }
 
 int
 parse_signature()
 {
-    ret = get_packet_data();
-
-    if (ret == t_got_signal)
-    {
-        process_signal();
-    }
-    else
-    {
-        
-    }
+    return 0;
 }
 
 int
@@ -97,13 +87,22 @@ process_packet()
 }
 
 int
+open_server_socket()
+{
+    return 0;
+}
+
+int
 main_loop()
 {
     int ret;
+    unsigned char read_buff[8192];
+    int sock;
 
+    sock = open_server_socket();
     while(running)
     {
-        ret = read();
+        ret = read(sock, read_buff, sizeof(read_buff));
         {
             if (ret == -1)
             {
@@ -112,19 +111,22 @@ main_loop()
                     int status;
                     pid_t child_id;        
 
-                    child_id = waitpid(-1, &status, 0);
+                    child_id = waitpid(0, &status, 0);
                     process_child_exit(child_id, status);
                 }
             }
             else
             {
-                process_packet();
+                process_packet(read_buff);
             }  
         }
     }
+    close(sock);
+    return 0;
 }
 
 int main(int argc, char *argv[])
 {
     main_loop();
+    return 0;
 }
