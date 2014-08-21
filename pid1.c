@@ -25,8 +25,6 @@ main()
         return 1;
     }
 
-        
-
     close(0);
     close(1);
     close(2);

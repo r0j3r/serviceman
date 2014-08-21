@@ -3,4 +3,6 @@ pid1
 *.o
 *~
 serv
+servctl
 parse_services
+daemons
