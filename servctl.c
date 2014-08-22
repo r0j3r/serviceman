@@ -22,6 +22,7 @@ enum token
     SUCCESSFULEXIT,
     TRUE,
     FALSE,
+    LOGINSESSION,
     END_OF_FILE
 };
 
@@ -125,6 +126,12 @@ int char_lookahead;
 enum token token_lookahead;
 
 enum token next_tok(void);
+
+void
+rollback_lex_pos(void)
+{
+    lex_pos = lex_start_pos;
+}
 
 struct packet *
 parse_def_file(char * filename)
@@ -240,6 +247,11 @@ parse_def(char * buff)
             token_lookahead = next_tok();
             packet->keepalive = parse_keepalive_options();
         }
+        else if (token_lookahead == LOGINSESSION)
+        {
+            token_lookahead = next_tok();
+            packet->login_session = 1;
+        }
         else
         {
             token_lookahead = next_tok();            
@@ -315,7 +327,7 @@ struct token_tab
 struct token_tab tok_tab[] = 
 {{"label", LABEL}, {"program", PROGRAM}, {"programargs", PROGRAMARGS},
 {"keepalive", KEEPALIVE},{"successfulexit", SUCCESSFULEXIT},{"true", TRUE},
-{"false", FALSE}, {0, STRING}}; 
+{"false", FALSE}, {"login_session", LOGINSESSION}, {0, STRING}}; 
 
 int keywords_count = 7;
  
@@ -326,6 +338,7 @@ find_token(char * lexeme)
 
     tok_tab[keywords_count].token_string = lexeme;
     for(i = 0; strcasecmp(tok_tab[i].token_string, lexeme); i++);
+    if (tok_tab[i].tok_id != STRING) rollback_lex_pos();
     return tok_tab[i].tok_id;
 }
 

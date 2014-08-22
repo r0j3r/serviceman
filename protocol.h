@@ -34,6 +34,7 @@ struct packet
     int label; //offset in stringtab
     int program; //offset in stringtab  
     int program_args; //from start of packet; array of offsets into stringtab
-    int program_args_count; 
+    int program_args_count;
+    unsigned char login_session; 
     int keepalive; //offset from start of packet
 };

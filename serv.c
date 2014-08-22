@@ -21,6 +21,7 @@ struct service
     unsigned char * keepalive;
     unsigned short restart_count;
     unsigned short restart_limit;
+    unsigned char login_session;
     struct timeval last_restart_tstamp;
     unsigned int throttle_interval; 
     unsigned int argc;
@@ -64,7 +65,8 @@ create_service(unsigned char * p)
     }
     memset(s, 0, sizeof(*s));
     s->throttle_interval = 10;    
-
+    s->login_session = pack->login_session;
+ 
     string_buffer = p + pack->stringtab_offset;
     s->label = string_buffer + pack->label;
     if (pack->program)
@@ -149,7 +151,7 @@ process_child_exit(pid_t child_id, int status)
     printf("processing child exit\n");
     //get service using child_id
     service = find_service_with_pid(child_id);
-    if (!service) return 0; 
+    if (!service) return -1; 
     service->pid = 0; 
     if (service->keepalive)
     {
