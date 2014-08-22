@@ -26,6 +26,7 @@ struct service
     unsigned int argc;
     unsigned char * filename;
     char * const * argv;
+    unsigned char * data;
 };
 
 unsigned char running = 1;
@@ -62,12 +63,14 @@ create_service(unsigned char * p)
         return 0;
     }
     memset(s, 0, sizeof(*s));
-    
+    s->throttle_interval = 10;    
+
     string_buffer = p + pack->stringtab_offset;
     s->label = string_buffer + pack->label;
     if (pack->program)
     {
         s->filename = string_buffer + pack->program;
+        printf("filename is: %s\n", s->filename);
     }
     else
     {
@@ -114,9 +117,27 @@ spawn(struct service * s)
 {
     pid_t child_id;
 
-    child_id = fork(); 
-    if (child_id != 0) return child_id;
-    else execve((const char *)s->filename, s->argv, 0);
+    child_id = fork();
+    printf("forking\n");
+    if (child_id < 0)
+    {
+        printf("fork failed\n");
+        return -1;
+    } 
+    if (child_id != 0)
+    {
+        s->pid = child_id;   
+        return child_id;
+    }
+    else
+    { 
+        printf("executing %s\n", s->filename); 
+        if (execvp((const char *)s->filename, s->argv) < 0)
+        {
+            printf("child: exec failed\n");
+            exit(1);
+        }
+    }
     return 0;
 }
 
@@ -125,8 +146,10 @@ process_child_exit(pid_t child_id, int status)
 {
     struct service * service;
 
+    printf("processing child exit\n");
     //get service using child_id
     service = find_service_with_pid(child_id);
+    if (!service) return 0; 
     service->pid = 0; 
     if (service->keepalive)
     {
@@ -200,14 +223,20 @@ process_packet(unsigned char * p)
         switch(p_m->op)
         {
         case 1:
+            printf("creating service\n");
             service = create_service(p + sizeof(struct proto_meta));
-            if (spawn(service) < 0)
+            if(service)
             {
-                return E_SPAWN_FAILED;
-            }       
-            else
-            {
-                return SUCCESS;
+                service->data = p; 
+                if (spawn(service) < 0)
+                {
+                    printf("spawn failed\n");
+                    return E_SPAWN_FAILED;
+                }       
+                else
+                {
+                    return SUCCESS;
+                }
             }
             break;
         default:
@@ -215,6 +244,7 @@ process_packet(unsigned char * p)
             break;      
         }
     }
+    printf("protocol unknown\n");
     return E_UNKNOWN_PROTOCOL;
 }
 
@@ -396,13 +426,18 @@ main_loop()
                         peer_is_connected = 0;
                     }
                     if ((payload->payload_len + sizeof(struct proto_meta)) 
-                            >= bytes_received)
+                            <= bytes_received)
                     {
                         unsigned int remaining_bytes;
-                        int err;                      
+                        int err;               
+                        unsigned char * d;       
    
                         printf("processing\n");
-                        err = process_packet(read_buff);
+                        d = malloc(payload->payload_len 
+                            + sizeof(struct proto_meta));
+                        memcpy(d, read_buff, payload->payload_len 
+                            + sizeof(struct proto_meta)); 
+                        err = process_packet(d);
                         send_reply(err, peer_sock);
                         remaining_bytes = bytes_received - (payload->payload_len + sizeof(struct proto_meta));
                         if (remaining_bytes > 0)
@@ -434,8 +469,12 @@ main_loop()
                 pid_t child_id;        
 
                 block_sigchld();
-                child_id = waitpid(0, &status, 0);
-                process_child_exit(child_id, status);
+                child_id = waitpid(0, &status, WNOHANG);
+                while(child_id) 
+                {                 
+                    process_child_exit(child_id, status);
+                    child_id = waitpid(0, &status, 0);
+                };
                 sigchld_flag = 0; 
                 unblock_sigchld();
             }

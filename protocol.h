@@ -30,10 +30,10 @@ struct reply
 struct packet
 {
     int packet_size;
-    int stringtab_offset;
-    int label;
-    int program;   
-    int program_args;
-    int program_args_count;
-    int keepalive;
+    int stringtab_offset; //offset from start of packet
+    int label; //offset in stringtab
+    int program; //offset in stringtab  
+    int program_args; //from start of packet; array of offsets into stringtab
+    int program_args_count; 
+    int keepalive; //offset from start of packet
 };
