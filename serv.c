@@ -469,8 +469,12 @@ main_loop()
                 pid_t child_id;        
 
                 block_sigchld();
-                child_id = waitpid(0, &status, 0);
-                process_child_exit(child_id, status);
+                child_id = waitpid(0, &status, WNOHANG);
+                while(child_id) 
+                {                 
+                    process_child_exit(child_id, status);
+                    child_id = waitpid(0, &status, 0);
+                };
                 sigchld_flag = 0; 
                 unblock_sigchld();
             }
