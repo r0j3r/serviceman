@@ -56,7 +56,8 @@ get_defs(const char * dirname)
                 strcpy(path + 8, service->d_name);
                 p = parse_def_file(path);
                 printf("sending packet\n");
-                send_packet((unsigned char *)p, p->packet_size);
+                if (send_packet((unsigned char *)p, p->packet_size) < 0)
+                    printf("send_packet failed\n");;
             }
         }
         service = readdir(services_dir);
@@ -192,7 +193,7 @@ parse_def(char * buff)
     unsigned char * string_tab_staging;
 
     staging_buff_init();
-    packet = (struct packet *)staging_buffer;
+    packet = (struct packet *)staging_buffer_alloc(sizeof(*packet));
     char_lookahead = next_char();
     token_lookahead = next_tok();
 
@@ -284,7 +285,8 @@ parse_keepalive_options(void)
     keepalive_options[keepalive_pos++] = 0;
     keepalive_options[keepalive_pos++] = 0;
 
-    keepalive_options_staging_buff = malloc(sizeof(int) * keepalive_pos);
+    keepalive_options_staging_buff = staging_buffer_alloc(sizeof(int) 
+        * keepalive_pos);
     if (!keepalive_options_staging_buff) return -1;
     memcpy(keepalive_options_staging_buff, &keepalive_options, 
         sizeof(int) * keepalive_pos);
@@ -328,7 +330,7 @@ find_token(char * lexeme)
 }
 
 enum token
-next_tok()
+next_tok(void)
 {
     enum tokenizer_state tok_state = START;
 
