@@ -132,7 +132,9 @@ spawn(struct service * s)
         return child_id;
     }
     else
-    { 
+    {
+        if (s->login_session)
+            setsid(); 
         printf("executing %s\n", s->filename); 
         if (execvp((const char *)s->filename, s->argv) < 0)
         {
