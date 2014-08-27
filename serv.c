@@ -1,13 +1,16 @@
+#define _POSIX_C_SOURCE 200809L
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/time.h>
+#include <pwd.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <syslog.h>
+#include <string.h>
 #include "error.h"
 #include "protocol.h"
 
@@ -22,7 +25,8 @@ struct service
     unsigned short restart_count;
     unsigned short restart_limit;
     unsigned char login_session;
-    struct timeval last_restart_tstamp;
+    struct timeval last_start_tstamp;
+    int last_exit_status;
     unsigned int throttle_interval; 
     unsigned int argc;
     unsigned char * filename;
@@ -31,6 +35,8 @@ struct service
 };
 
 unsigned char running = 1;
+
+char socket_name[FILENAME_MAX];
 
 int
 got_sigchld()
@@ -154,7 +160,9 @@ process_child_exit(pid_t child_id, int status)
     //get service using child_id
     service = find_service_with_pid(child_id);
     if (!service) return -1; 
-    service->pid = 0; 
+    service->pid = 0;
+    service->last_exit_status = status;
+ 
     if (service->keepalive)
     {
         int restart_option; 
@@ -191,7 +199,7 @@ process_child_exit(pid_t child_id, int status)
             memset(&t_now, 0, sizeof(t_now));
             gettimeofday(&t_now, 0);
             if ((service->throttle_interval 
-                + service->last_restart_tstamp.tv_sec) 
+                + service->last_start_tstamp.tv_sec) 
                 < t_now.tv_sec)
             {
                 if (service->restart_limit)
@@ -201,15 +209,19 @@ process_child_exit(pid_t child_id, int status)
                         if (spawn(service) == 0)
                         {
                             service->restart_count += 1;
-                            service->last_restart_tstamp = t_now;
+                            service->last_start_tstamp = t_now;
                         }
                     }
                 }
                 else if (spawn(service) == 0)
                 {
                     service->restart_count += 1;
-                    service->last_restart_tstamp = t_now;
+                    service->last_start_tstamp = t_now;
                 }
+            }
+            else
+            {
+                //throttle
             }
         }
     }
@@ -222,11 +234,10 @@ process_packet(unsigned char * p)
     struct proto_meta * p_m = (struct proto_meta *)p;
     struct service * service;
 
-    if (memcmp(p_m->protocol_id, PROTO_ID_V1, 16) == 0)
+    if (memcmp(p_m->protocol_id, PROTO_ID_V1, sizeof(PROTO_ID_V1)) == 0)
     {
-        switch(p_m->op)
+        if (p_m->op == OP_CREATE)
         {
-        case 1:
             printf("creating service\n");
             service = create_service(p + sizeof(struct proto_meta));
             if(service)
@@ -239,21 +250,52 @@ process_packet(unsigned char * p)
                 }       
                 else
                 {
+                    gettimeofday(&service->last_start_tstamp, 0);
                     return SUCCESS;
                 }
             }
-            break;
-        default:
+        }
+        else if (p_m->op == OP_DELETE) //delete
+        {
+            //if there is no payload we are shutting down
+            //reboot(RB_POWEROFF)
+            return SUCCESS;
+        }
+        else if (p_m->op == OP_READ) //read
+        {
+            return SUCCESS;
+        } 
+        else
+        {
             return E_INVALID_OP;
-            break;      
         }
     }
     printf("protocol unknown\n");
     return E_UNKNOWN_PROTOCOL;
 }
 
+void
+set_up_socket_name()
+{
+    int user_id;
+
+    user_id = getuid();
+    if (user_id == 0)
+    {
+        strcpy(socket_name, SERVCTL_SOCKET);
+    }
+    else
+    {
+        struct passwd * pwd;
+ 
+        pwd = getpwuid(user_id);
+        strcpy(socket_name, pwd->pw_dir);
+        strcat(socket_name, SERVCTL_SOCKET);
+    }
+}
+
 int
-open_server_socket()
+open_server_socket(const char * socket_name)
 {
     int s;
     struct sockaddr_un unix_path;
@@ -264,7 +306,7 @@ open_server_socket()
 
     memset(&unix_path, 0, sizeof(unix_path));
     unix_path.sun_family = AF_UNIX;
-    strcpy(unix_path.sun_path, SERVCTL_SOCKET);
+    strcpy(unix_path.sun_path, socket_name);
 
     ret = bind(s, (struct sockaddr *)&unix_path, sizeof(unix_path.sun_family) 
         + strlen(unix_path.sun_path));
@@ -343,7 +385,8 @@ main_loop()
     unsigned char peer_is_connected, proto_meta_needed, payload_needed;
     unsigned int bytes_received = 0;
 
-    sock = open_server_socket();
+    set_up_socket_name();
+    sock = open_server_socket(socket_name);
     if (sock < 0)
     {
         printf("failed to open socket for incoming connections\n");
@@ -477,8 +520,8 @@ main_loop()
                 while(child_id) 
                 {                 
                     process_child_exit(child_id, status);
-                    child_id = waitpid(0, &status, 0);
-                };
+                    child_id = waitpid(0, &status, WNOHANG);
+                }
                 sigchld_flag = 0; 
                 unblock_sigchld();
             }
@@ -492,7 +535,7 @@ main_loop()
         }
     }
     close(sock);
-    if (unlink(SERVCTL_SOCKET) < 0) 
+    if (unlink(socket_name) < 0) 
     {
         printf("failed to unlink socket: %s\n", strerror(errno));
     }

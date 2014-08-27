@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -8,6 +9,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <pwd.h>
 #include "error.h"
 #include "protocol.h"
 
@@ -26,39 +28,104 @@ enum token
     END_OF_FILE
 };
 
-
 int parse_keepalive_options(void);
 struct packet * parse_def(char * buff);
 struct packet * parse_def_file(char * filename);
 int next_char(void);
 int connect_to_service_manager();
-int send_packet(unsigned char *, int);
+int send_packet(unsigned char *, unsigned int);
+int send_unload_packet(unsigned char *, unsigned int);
 int disconnect_from_service_manager();
+
+char servctl_socket[FILENAME_MAX];
 
 int serv_sd;
 
 int 
-get_defs(const char * dirname)
+load_defs(const char * dirname)
 {
-    DIR * services_dir = opendir(dirname);
+    DIR * services_dir;
     struct packet * p;
+    struct dirent * service;
 
-    struct dirent * service = readdir(services_dir);
-    connect_to_service_manager();
+    services_dir = opendir(dirname);
+    if (services_dir == 0)
+        return -1;
+
+    if (connect_to_service_manager())
+    {
+        printf("connect to service manager failed\n");
+        closedir(services_dir);
+        return -1;
+    }
+
+    service = readdir(services_dir);
     while(service)
     {
-        if (service->d_type == DT_REG)
+        if (service->d_name[0] != '.')
         {
-            if (service->d_name[0] != '.')
+            char path[FILENAME_MAX];
+            struct stat st_buf;
+
+            printf("%s\n", service->d_name);
+            strcpy(path, dirname);
+            strcpy(path + strlen(dirname), service->d_name);
+            if (stat(path, &st_buf) == 0)
             {
-                char path[NAME_MAX];
-                printf("%s\n", service->d_name);
-                strcpy(path, "daemons/");
-                strcpy(path + 8, service->d_name);
-                p = parse_def_file(path);
-                printf("sending packet\n");
-                if (send_packet((unsigned char *)p, p->packet_size) < 0)
-                    printf("send_packet failed\n");;
+                if (S_ISREG(st_buf.st_mode))
+                { 
+                    p = parse_def_file(path);
+                    printf("sending packet\n");
+                    if (send_packet((unsigned char *)p, p->packet_size) < 0)
+                        printf("send_packet failed\n");;
+                }
+            }
+        }
+        service = readdir(services_dir);
+    }
+    closedir(services_dir);
+    disconnect_from_service_manager();
+    return 0;
+}
+
+int 
+unload_defs(const char * dirname)
+{
+    DIR * services_dir;
+    struct packet * p;
+    struct dirent * service;
+
+    services_dir = opendir(dirname);
+    if (services_dir == 0)
+        return -1;
+
+    if (connect_to_service_manager())
+    {
+        printf("connect to service manager failed\n");
+        closedir(services_dir);
+        return -1;
+    }
+
+    service = readdir(services_dir);
+    while(service)
+    {
+        if (service->d_name[0] != '.')
+        {
+            char path[FILENAME_MAX];
+            struct stat st_buf;
+
+            printf("%s\n", service->d_name);
+            strcpy(path, dirname);
+            strcpy(path + strlen(dirname), service->d_name);
+            if (stat(path, &st_buf) == 0)
+            {
+                if (S_ISREG(st_buf.st_mode))
+                { 
+                    p = parse_def_file(path);
+                    printf("sending packet\n");
+                    if (send_unload_packet((unsigned char *)p, p->packet_size) < 0)
+                        printf("send_packet failed\n");;
+                }
             }
         }
         service = readdir(services_dir);
@@ -77,7 +144,7 @@ connect_to_service_manager()
     serv_sd = socket(AF_UNIX, SOCK_STREAM, 0);
     memset(&unix_path, 0, sizeof(unix_path));
     unix_path.sun_family = AF_UNIX;
-    strcpy(unix_path.sun_path, SERVCTL_SOCKET);
+    strcpy(unix_path.sun_path, servctl_socket);
 
     ret = connect(serv_sd, (struct sockaddr *)&unix_path, sizeof(unix_path.sun_family)
         + strlen(unix_path.sun_path));
@@ -85,7 +152,7 @@ connect_to_service_manager()
 }
 
 int
-send_packet(unsigned char * p, int len)
+send_packet(unsigned char * p, unsigned int len)
 {
     unsigned char pbuff[16384];
     unsigned char reply[4096];
@@ -95,10 +162,103 @@ send_packet(unsigned char * p, int len)
     fprintf(stderr,"sending packet\n");
     memset(pbuff, 0, sizeof(pbuff));
     u = (struct proto_meta *)pbuff;
-    memcpy(u->protocol_id, PROTO_ID_V1, 32);
+    memcpy(u->protocol_id, PROTO_ID_V1, 16);
     u->payload_len = len;
     u->op = OP_CREATE;
     memcpy(pbuff + sizeof(struct proto_meta), p, len);
+ 
+    ret = write(serv_sd, pbuff, len + sizeof(struct proto_meta));
+    if (ret < 0) return -1;
+    ret = read(serv_sd, reply, sizeof(reply));
+    if (ret < 0) return -1;
+    return 0;
+}
+
+int
+send_unload_packet(unsigned char * p, unsigned int len)
+{
+    unsigned char pbuff[16384];
+    unsigned char reply[4096];
+    struct proto_meta * u;
+    int ret;
+
+    fprintf(stderr,"sending packet\n");
+    memset(pbuff, 0, sizeof(pbuff));
+    u = (struct proto_meta *)pbuff;
+    memcpy(u->protocol_id, PROTO_ID_V1, 16);
+    u->payload_len = len;
+    u->op = OP_DELETE;
+    memcpy(pbuff + sizeof(struct proto_meta), p, len);
+ 
+    ret = write(serv_sd, pbuff, len + sizeof(struct proto_meta));
+    if (ret < 0) return -1;
+    ret = read(serv_sd, reply, sizeof(reply));
+    if (ret < 0) return -1;
+    return 0;
+}
+
+int
+send_list_packet()
+{
+    unsigned char pbuff[16384];
+    unsigned char reply[4096];
+    struct proto_meta * u;
+    int ret;
+
+    fprintf(stderr,"sending packet\n");
+    memset(pbuff, 0, sizeof(pbuff));
+    u = (struct proto_meta *)pbuff;
+    memcpy(u->protocol_id, PROTO_ID_V1, 16);
+    memcpy(u->resource_id, JOB_LIST_ID, 16);
+    u->payload_len = 0;
+    u->op = OP_READ;
+     
+    ret = write(serv_sd, pbuff, sizeof(struct proto_meta));
+    if (ret < 0) return -1;
+    ret = read(serv_sd, reply, sizeof(reply));
+    if (ret < 0) return -1;
+    return 0;
+}
+
+int
+send_shutdown_packet(const unsigned char const* magic)
+{
+    unsigned char pbuff[16384];
+    unsigned char reply[4096];
+    struct proto_meta * u;
+    int ret;
+
+    fprintf(stderr,"sending packet\n");
+    memset(pbuff, 0, sizeof(pbuff));
+    u = (struct proto_meta *)pbuff;
+    memcpy(u->protocol_id, PROTO_ID_V1, 16);
+    memcpy(u->resource_id, RUN_VAR_ID, 16);
+    u->payload_len = 16;
+    u->op = OP_UPDATE;
+    memcpy(pbuff + sizeof(struct proto_meta), magic, 16);
+     
+    ret = write(serv_sd, pbuff, sizeof(struct proto_meta) + 16);
+    if (ret < 0) return -1;
+    ret = read(serv_sd, reply, sizeof(reply));
+    if (ret < 0) return -1;
+    return 0;
+}
+
+int
+send_remove_packet(unsigned char * l, unsigned int len)
+{
+    unsigned char pbuff[16384];
+    unsigned char reply[4096];
+    struct proto_meta * u;
+    int ret;
+
+    fprintf(stderr,"sending remove packet\n");
+    memset(pbuff, 0, sizeof(pbuff));
+    u = (struct proto_meta *)pbuff;
+    memcpy(u->protocol_id, PROTO_ID_V1, 16);
+    u->payload_len = len;
+    u->op = OP_DELETE;
+    memcpy(pbuff + sizeof(struct proto_meta), l, len);
  
     ret = write(serv_sd, pbuff, len + sizeof(struct proto_meta));
     if (ret < 0) return -1;
@@ -115,11 +275,11 @@ disconnect_from_service_manager()
 }
 
 char buff[4096];
-int pos;
+unsigned long pos;
 
 char lex_buff[4096];
-int lex_pos;
-int lex_start_pos;
+unsigned long lex_pos;
+unsigned long lex_start_pos;
 
 char * lexeme;
 int char_lookahead;
@@ -156,10 +316,9 @@ fail:
     return 0;
 }
 
-
 unsigned char * staging_buffer;
-int staging_buffer_pos = 0;
-const int staging_buffer_size = 8192;
+unsigned long staging_buffer_pos = 0;
+const unsigned long staging_buffer_size = 8192;
 
 int
 staging_buff_init()
@@ -170,7 +329,7 @@ staging_buff_init()
 }
 
 void *
-staging_buffer_alloc(int size)
+staging_buffer_alloc(unsigned long size)
 {
     if (staging_buffer_pos < staging_buffer_size)
     {
@@ -268,7 +427,7 @@ int
 parse_keepalive_options(void)
 {
     int keepalive_options[256];
-    int keepalive_pos = 0;
+    unsigned long keepalive_pos = 0;
 
     int * keepalive_options_staging_buff;
 
@@ -337,7 +496,7 @@ find_token(char * lexeme)
     int i;
 
     tok_tab[keywords_count].token_string = lexeme;
-    for(i = 0; strcasecmp(tok_tab[i].token_string, lexeme); i++);
+    for(i = 0; strcmp(tok_tab[i].token_string, lexeme); i++);
     if (tok_tab[i].tok_id != STRING) rollback_lex_pos();
     return tok_tab[i].tok_id;
 }
@@ -393,8 +552,114 @@ next_tok(void)
 
 
 int
-main()
+main(int argc, char * argv[])
 {
-    get_defs("daemons");
-    return 0;
+    char * subcommand;
+    struct passwd * pwd;
+
+    if (argc < 2)
+    {
+        printf("usage: servctl subcommand options\n");  
+        return 1; 
+    }
+
+    subcommand = argv[1];
+
+    if (strcmp(subcommand, "load") == 0)
+    {
+        pwd = getpwuid(getuid());
+
+        if (pwd == 0) return 1;
+       
+        if (pwd->pw_uid == 0)
+        {
+            strcpy(servctl_socket, SERVCTL_SOCKET);
+            load_defs("daemons");
+        }
+        else
+        {
+            strcpy(servctl_socket, pwd->pw_dir);
+            strcat(servctl_socket, SERVCTL_SOCKET); 
+            load_defs("agents");
+        }
+        return 0;
+    }
+    else if (strcmp(subcommand, "unload") == 0)
+    {
+        pwd = getpwuid(getuid());
+
+        if (pwd == 0) return 1;
+       
+        if (pwd->pw_uid == 0)
+        {
+            strcpy(servctl_socket, SERVCTL_SOCKET);
+            unload_defs("daemons");
+        }
+        else
+        {
+            strcpy(servctl_socket, pwd->pw_dir);
+            strcat(servctl_socket, SERVCTL_SOCKET); 
+            unload_defs("agents");
+        }
+        return 0;
+    }
+    else if (strcmp(subcommand, "remove") == 0)
+    {
+        char * label;
+
+        if (argc < 3) return 1;
+
+        label = argv[2];
+        
+        connect_to_service_manager();
+        send_remove_packet((unsigned char *)label, strlen(label));    
+        disconnect_from_service_manager();
+
+        return 0;
+    } 
+    else if (strcmp(subcommand, "list") == 0)
+    {
+        char * user;
+
+        if (argc < 3) return 1;
+
+        user = argv[2];
+
+        pwd = getpwnam(user);
+
+        if (pwd == 0) return 1;
+       
+        if (pwd->pw_uid == 0)
+        {
+            strcpy(servctl_socket, SERVCTL_SOCKET);
+        }
+        else
+        {
+            strcpy(servctl_socket, pwd->pw_dir);
+            strcat(servctl_socket, SERVCTL_SOCKET); 
+        }
+        connect_to_service_manager();
+        send_list_packet();
+        disconnect_from_service_manager();
+        return 0;
+    } 
+    else if (strcmp(subcommand, "reboot") == 0)
+    {
+        connect_to_service_manager();
+        send_shutdown_packet(REBOOT_MAGIC);
+        disconnect_from_service_manager();
+        return 0;
+    }
+    else if (strcmp(subcommand, "poweroff") == 0)
+    {
+        connect_to_service_manager();
+        send_shutdown_packet(POWEROFF_MAGIC);
+        disconnect_from_service_manager();
+        return 0;
+    }   
+    else
+    {
+        printf("bad subcommand\n");
+    }
+    return 1;
 }
