@@ -39,5 +39,7 @@ main()
     setsid();
     setpgid( 0, 0);   
 
+    //mount /proc /sys /dev /dev/pts /dev/shm?
+
     return execve("/sbin/serv", (char *[]) {"serv", 0}, (char *[]) { 0 });
 }
