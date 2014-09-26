@@ -6,11 +6,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <linux/limits.h>
 
 int
 main()
 {
-   int status;
+   int status, i;
    sigset_t set;
 
     if (getuid() != 0) 
@@ -25,14 +26,17 @@ main()
         return 1;
     }
 
-    close(0);
-    close(1);
-    close(2);
+    (void)fprintf(stderr, "pid1 starting...\n");
+
+    for(i = 3; i < NR_OPEN; i++) close(i);
 
     sigfillset(&set);
     sigprocmask(SIG_BLOCK, &set, 0);
 
-    if (fork()) for(;;) waitpid(-1, &status, 0);
+    if (fork())
+    {
+        for(;;) waitpid(-1, &status, 0);
+    }
    
     sigprocmask(SIG_UNBLOCK, &set, 0);
 
@@ -41,5 +45,5 @@ main()
 
     //mount /proc /sys /dev /dev/pts /dev/shm?
 
-    return execve("/sbin/serv", (char *[]) {"serv", 0}, (char *[]) { 0 });
+    return execve("/sbin/process-manager", (char *[]) {"process-manager", 0}, (char *[]) { 0 });
 }
