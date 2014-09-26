@@ -372,8 +372,8 @@ init_mtab(void)
     {
         return;
     } 
-    int proc_mount_fd = open("/proc/mounts", O_RDONLY);
-    if (proc_mount_fd < 0)
+    int proc_mounts_fd = open("/proc/mounts", O_RDONLY);
+    if (proc_mounts_fd < 0)
     {
         close(mtab_fd);
         return;
@@ -382,20 +382,20 @@ init_mtab(void)
     struct stat stat_buf;
     memset(&stat_buf, 0, sizeof(stat_buf));
 
-    if (fstat(proc_mount_fd, &stat_buf))
+    if (0 == fstat(proc_mounts_fd, &stat_buf))
     {
         
-        unsigned char * mtab_buf = malloc(stat_buf.st_size);
+        unsigned char * mtab_buf = malloc(1024);
         unsigned char data_needed = 1;
         int bytes_read = 0;
  
         while(data_needed)
         {
-            int ret = read(proc_mount_fd, mtab_buf + bytes_read, stat_buf.st_size - bytes_read);
+            int ret = read(proc_mounts_fd, mtab_buf + bytes_read, 1024 - bytes_read);
             if (ret > 0)
             {
                 bytes_read += ret;
-                if (bytes_read == stat_buf.st_size)
+                if (bytes_read == 1024)
                 {
                     data_needed = 0;
                 }
@@ -407,10 +407,14 @@ init_mtab(void)
                     data_needed = 0;
                 } 
             }
+            else
+            {
+                data_needed = 0;
+            }
         }
-        close(proc_mount_fd);
+        close(proc_mounts_fd);
     
-        if (data_needed == 0)
+        if (bytes_read)
         {
             int tries = 3;
             unsigned char file_open = 1;
@@ -420,11 +424,11 @@ init_mtab(void)
                 int bytes_written = 0;
                 while(have_data)
                 {
-                    int ret = write(mtab_fd, mtab_buf + bytes_written, stat_buf.st_size - bytes_written);
+                    int ret = write(mtab_fd, mtab_buf + bytes_written, bytes_read - bytes_written);
                     if (ret > 0)
                     {
                          bytes_written += ret;
-                         if (bytes_written == stat_buf.st_size)
+                         if (bytes_written == bytes_read)
                          {
                              have_data = 0;
                          } 
