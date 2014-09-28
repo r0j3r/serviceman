@@ -1,5 +1,5 @@
-CFLAGS=-flto -O3 -g -Wall -std=gnu99 -pedantic
-LDFLAGS=-flto
+CFLAGS=-O -g -Wall -std=gnu99 -pedantic
+LDFLAGS=
 serv: serv.o protocol.o
 protocol.o: protocol.h protocol.c
 serv.o: serv.c protocol.h error.h

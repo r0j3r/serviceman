@@ -16,12 +16,27 @@ int write_to_control_file(char *, char *);
 void init_mtab(void);
 void sulogin(void);
 
+int got_sigterm = 0;
+
+void
+handle_sigterm(int num, siginfo_t * info, void * d)
+{
+    got_sigterm = 1;
+}
+
 int
-main()
+main(void)
 {
     unsigned char running =1;
     pid_t modprobe_pid, mkswap_pid, child_pid, fsck_pid, mkfs_pid, swapon_pid;
     int status = 0, destlen = 0, fsck_exit_code = 0, reply_packet = 0;
+    struct sigaction sig;
+
+    memset(&sig, 0, sizeof(sig));
+    sigfillset(&sig.sa_mask);
+    sig.sa_flags = SA_SIGINFO;
+    sig.sa_sigaction = handle_sigterm;
+    sigaction(SIGTERM, &sig, 0);
 
     (void)fprintf(stderr, "volume-manager starting...\n");
 
@@ -205,18 +220,18 @@ main()
             int mount_pid = fork();
             if (0 == mount_pid)
             { 
-                char * argv[5];
+                char * argv[6];
                 argv[0] = "mount";
                 argv[1] = "-a";
                 argv[2] = "-v";
-                argv[3] = "-tnonfs";
-                argv[4] = 0;
+                argv[3] = "-t";
+                argv[4] = "nonfs";
+                argv[5] = 0;
 
                 execv("/bin/mount", argv);
                 _exit(4); 
             }
             (void)wait(&status); 
-                        
         }
     }
     else
@@ -235,7 +250,7 @@ main()
         endp = create_endpoint(endpoint_name);
         if (endp < 0)
         {
-            fprintf(stderr, "failed to create endpoint\n");
+            fprintf(stderr, "failed to create endpoint, giving up...\n");
         }
     }
     if (endp > 0)
@@ -245,7 +260,8 @@ main()
             unsigned char data[1024];
             int ret;
             int bytes_read = 0;  
-            struct request *request = (struct request *)data;
+ 
+           struct request *request = (struct request *)data;
 
             ret = read(endp, data + bytes_read, sizeof(data) - bytes_read);
             if (ret > 0)
@@ -284,6 +300,20 @@ main()
             }  
         }
     }
+    else
+    {
+        while (got_sigterm == 0)
+            pause();
+    }
+
+    swapoff("/dev/zram0");
+    swapoff("/dev/zram1");
+
+    write_to_control_file("1", "/sys/block/zram0/reset");
+    write_to_control_file("1", "/sys/block/zram1/reset");
+    write_to_control_file("1", "/sys/block/zram2/reset");
+
+
     unlink("/run/volume-manager-socket");
     (void)fprintf(stderr, "volume-manager: bailing out"); 
 }
@@ -298,7 +328,7 @@ write_to_control_file(char * val, char * cfile)
     tries = 3;
     while(tries)
     {
-        fd = open(cfile, O_RDWR);
+        fd = open(cfile, O_WRONLY);
         if (fd < 0)
         {
             (void)fprintf(stderr, "failed to open control file %s: %s\n", cfile, strerror(errno));

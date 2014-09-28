@@ -28,6 +28,8 @@ struct waiter
 struct item * resources;
 
 struct item * create_item(struct request *);
+struct item * find_item(unsigned char id[16]);
+void queue_request(struct item *, struct request *);
 
 
 int
@@ -89,10 +91,11 @@ handle_create_request(struct request * r)
     {
         i->datalen = r->payloadlen;
         memcpy(i->data, r->payload, r->payloadlen);
+        notify_waiters(i); 
     }
     else
     {
-        send_reply(r);
+        send_error_reply(r);
     }
 }
 
@@ -146,4 +149,21 @@ queue_request(struct item * i, struct request * r)
     i->request_queue->next->endpoint = malloc(r->payloadlen);
     memcpy(i->request_queue->next->endpoint, r->payload, r->payloadlen);
     i->request_queue->next->next = i->request_queue;
+}
+
+struct item *
+find_item(unsigned char id[16])
+{
+    struct item * i;
+
+    memcpy(resources->id, id, 16);
+    for(i = resources->next; memcmp(i->id, id, 16); 
+        i = i->next);
+    return i; 
+}
+
+void
+send_reply(struct item * i, struct request * r)
+{
+    return;
 }
