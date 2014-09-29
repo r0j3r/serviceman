@@ -1,5 +1,6 @@
-CFLAGS=-O -g -Wall -std=gnu99 -pedantic
-LDFLAGS=
+CC=gcc
+CFLAGS=-fPIE -flto -O -g -Wall -std=gnu99 -pedantic -march=native
+LDFLAGS=-fPIE -flto -O -g -Wall -std=gnu99 -pedantic -march=native
 serv: serv.o protocol.o
 protocol.o: protocol.h protocol.c
 serv.o: serv.c protocol.h error.h
