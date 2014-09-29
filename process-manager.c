@@ -16,6 +16,7 @@ int setctty(char *);
 unsigned char any_child_exists(void);
 void process_child_shutdown(pid_t);
 int unmounted_all(void);
+unsigned char timeout = 0;
 
 int run_state = 0;
 pid_t volume_manager_pid = 0, udevd_pid = 0, agetty1_pid = 0, agetty2_pid = 0;
@@ -37,6 +38,12 @@ void
 handle_sigchild(int num, siginfo_t * info, void * b)
 {
     got_sigchild = 1;
+}
+
+void
+handle_sigalarm(int num, siginfo_t * info, void * b)
+{
+    timeout = 1;
 }
 
 int
@@ -169,7 +176,6 @@ main(void)
         char * argv[5];
         int fd; 
 
-   
         close(0);
         close(1);
         close(2);
@@ -286,7 +292,7 @@ main(void)
     }
 
     fprintf(stderr, "process-manager shutting down system...\n");
-    unsigned char any_child_exists = 1, timeout = 0;
+    unsigned char any_child_exists = 1;
     int status = 0;
 
     fprintf(stderr, "sending SIGTERM to all processes...\n");
@@ -294,6 +300,15 @@ main(void)
     {
         fprintf(stderr, "process-manager: kill failed: %s\n", strerror(errno));
     }
+    
+    memset(&sig, 0, sizeof(sig));
+    sigfillset(&sig.sa_mask);
+    sig.sa_flags = SA_SIGINFO;
+    sig.sa_sigaction = handle_sigalarm;
+    sigaction(SIGALRM, &sig, 0); 
+
+    alarm(3);
+
     while (any_child_exists)
     {
         pid_t child = wait(&status);
@@ -303,6 +318,15 @@ main(void)
             {
                 any_child_exists = 0;
                 fprintf(stderr, "process-manager: no children remains...\n");
+            }
+            else if (EINTR == errno)
+            {
+                if (timeout)
+                {
+                    kill(-1, SIGKILL);
+                    timeout = 0;
+                    alarm(3); 
+                }
             } 
         }   
     }
@@ -318,18 +342,18 @@ main(void)
         {
             fprintf(stderr, "process-manager: unmount failed: sending SIGKILL to stragglers...\n");
             kill(-1, SIGKILL);
-            sleep(10);
+            sleep(1);
             root_busy--;
             fprintf(stderr, "process-manager: retrying unmount\n");
         }
     } 
+    if (-1 == umount("/proc"))
+    { 
+        fprintf(stderr, "failed to umount /proc: %s\n", strerror(errno));
+    }
     if (-1 == mount("", "/dev", "", MS_REMOUNT | MS_RDONLY, 0))
     { 
         fprintf(stderr, "failed to remount dev read only: %s\n", strerror(errno));
-    }
-    if (-1 == mount("", "/proc", "", MS_REMOUNT | MS_RDONLY, 0))
-    { 
-        fprintf(stderr, "failed to remount proc read only: %s\n", strerror(errno));
     }
     if (-1 == mount("", "/", "", MS_REMOUNT | MS_RDONLY, 0))
     { 
@@ -337,8 +361,6 @@ main(void)
     }
 
     sync();
-    fprintf(stderr,"root synced calling reboot...\n"); 
-    sleep(20);
     reboot(run_state); 
     while(1);
         pause();      
