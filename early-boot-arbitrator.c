@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include "notification.h"
 
-void handle_create_request(struct request *);
-void handle_read_request(struct request *); 
 struct waiter; 
 
 struct item
@@ -30,10 +28,14 @@ struct item * resources;
 struct item * create_item(struct request *);
 struct item * find_item(unsigned char id[16]);
 void queue_request(struct item *, struct request *);
-
+void send_reply(struct item *, struct request *);
+void handle_create_request(struct request *);
+void handle_read_request(struct request *); 
+int notify_waiters(struct item *);
+int send_error_reply(struct request *);
 
 int
-main()
+main(void)
 {
     unsigned char running;
     int ret, endp, bytes_read = 0;
@@ -166,4 +168,20 @@ void
 send_reply(struct item * i, struct request * r)
 {
     return;
+}
+
+int
+notify_waiters(struct item * i)
+{
+    return 0;
+}
+
+int
+send_error_reply(struct request * r)
+{
+    if (!r)
+    {
+        return -1;
+    }
+    return 0;
 }
