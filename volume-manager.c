@@ -482,17 +482,20 @@ init_mtab(void)
                         {
                             file_open = 0;
                             tries--;
+                            free(mtab_buf);
                         }
                         else if (errno == EIO)
                         {
                             file_open = 0;
                             tries--; 
+                            free(mtab_buf);
                         }
                     }
                     else
                     {
                         file_open = 0;
                         tries = 0;
+                        free(mtab_buf);
                     }
                 }
             }
