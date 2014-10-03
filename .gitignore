@@ -12,3 +12,5 @@ volume-manager
 early-boot-arbitrator
 test-init-mtab
 etc
+test_notifications
+test_notify

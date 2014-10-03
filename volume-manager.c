@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -15,6 +16,9 @@
 int write_to_control_file(char *, char *);
 void init_mtab(void);
 void sulogin(void);
+void get_zram_device_status(void);
+void notify_root_ready(int, unsigned char[16]);
+void notify_tmp_ready(int, unsigned char[16]);
 
 int got_sigterm = 0;
 
@@ -49,11 +53,6 @@ main(void)
         (void)fprintf(stderr, "volume-manager: mount failed %s\n", strerror(errno));
     }
 
-    if (-1 == mount("none", "/run", "tmpfs", 0, 0))
-    {
-        (void)fprintf(stderr, "volume-manager: mount failed %s\n", strerror(errno));
-    }
-
     mkdir("/dev/pts", 0755);
     if (-1 == mount("none", "/dev/pts", "devpts", 0, "mode=620"))
     {
@@ -80,9 +79,15 @@ main(void)
     }     
     child_pid = wait(&status);    
 
+    get_zram_device_status();
+
     int zram0_err = write_to_control_file("512M", "/sys/block/zram0/disksize");
     int zram1_err = write_to_control_file("512M", "/sys/block/zram1/disksize");
     int zram2_err = write_to_control_file("512M", "/sys/block/zram2/disksize");
+
+    int endp;
+    unsigned char endpoint_name[] = "/run/volume-manager-s";
+    endp = create_endpoint(endpoint_name);
 
     if (0 == zram2_err)
     {
@@ -107,6 +112,7 @@ main(void)
         {
             (void)fprintf(stderr, "volume-manager: mount failed %s\n", strerror(errno));
         }
+        notify_tmp_ready(endp, "volume-manager-s");
     }
 
     if (0 == zram0_err)
@@ -239,20 +245,8 @@ main(void)
         sulogin();
     }
 
-    int endp;
-    char endpoint_name[] = "/run/volume-manager-socket";
- 
-    endp = create_endpoint(endpoint_name);
-    if (endp < 0)
-    {
-        fprintf(stderr, "failed to create endpoint\n");
-        unlink(endpoint_name);
-        endp = create_endpoint(endpoint_name);
-        if (endp < 0)
-        {
-            fprintf(stderr, "failed to create endpoint, giving up...\n");
-        }
-    }
+    notify_root_ready(endp, "volume-manager-s");
+
     if (endp > 0)
     {
         while(running) 
@@ -261,7 +255,7 @@ main(void)
             int ret;
             int bytes_read = 0;  
  
-           struct request *request = (struct request *)data;
+            struct request * request = (struct request *)data;
 
             ret = read(endp, data + bytes_read, sizeof(data) - bytes_read);
             if (ret > 0)
@@ -269,7 +263,7 @@ main(void)
                 bytes_read += ret;
                 while (bytes_read > sizeof(struct request))
                 {
-                    if (bytes_read > request->payloadlen)
+                    if (bytes_read > request->data_len)
                     {
                         if (request->op == READ)
                         {
@@ -277,7 +271,7 @@ main(void)
                             {
                                 struct sockaddr_un dest;
                                 memset(&dest, 0, sizeof(dest));
-                                memcpy(dest.sun_path, request->payload, request->payloadlen);
+                                memcpy(dest.sun_path, request->data, request->data_len);
                                 dest.sun_family = AF_UNIX;
                             
                                 destlen = sizeof(dest.sun_family) + strlen(dest.sun_path) + 1;
@@ -285,11 +279,11 @@ main(void)
                                     (struct sockaddr *)&dest, destlen);                                
                             }    
                         }
-                        if (bytes_read > (sizeof(*request) + request->payloadlen))
+                        if (bytes_read > (sizeof(*request) + request->data_len))
                         {
                             memmove(data, data + bytes_read, sizeof(data) - bytes_read);
                         }
-                        bytes_read = bytes_read - (sizeof(*request) + request->payloadlen);
+                        bytes_read = bytes_read - (sizeof(*request) + request->data_len);
                     }
                 }
             }
@@ -315,7 +309,26 @@ main(void)
 
 
     unlink("/run/volume-manager-socket");
-    (void)fprintf(stderr, "volume-manager: bailing out"); 
+    (void)fprintf(stderr, "volume-manager: bailing out\n"); 
+}
+
+void
+get_zram_device_status()
+{
+    struct stat dev_zram_stat;
+    int stat_count;
+    int ret;
+    do
+    {
+        stat_count = 0; 
+        ret = stat("/dev/zram0", &dev_zram_stat);
+        if (0 == ret) stat_count++;      
+        ret = stat("/dev/zram1", &dev_zram_stat); 
+        if (0 == ret) stat_count++;  
+        ret = stat("/dev/zram2", &dev_zram_stat);
+        if (0 == ret) stat_count++;    
+        usleep(250000);
+    } while(stat_count < 3);
 }
 
 int
@@ -506,5 +519,31 @@ init_mtab(void)
 void
 sulogin(void)
 {
-    return;
+    int shell_pid = fork();
+    if (shell_pid != 0)
+    {
+        char * argv[2];
+        
+        argv[0] = "ksh";
+        argv[1] = 0;
+        execv("/bin/ksh", argv);
+        _exit(4);
+    }
+    int status;
+    waitpid(shell_pid, &status, 0);
+    (void)fprintf(stderr, "rebooting system\n");
+    kill(1, SIGTERM);
+    exit(1);
+}
+
+void
+notify_root_ready(int fd, unsigned char our_endp[16])
+{
+    send_notify(fd, ROOT_STATUS, our_endp);
+}
+
+void 
+notify_tmp_ready(int fd, unsigned char our_endp[16])
+{
+    send_notify(fd, TMP_STATUS, our_endp);
 }

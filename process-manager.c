@@ -19,7 +19,7 @@ int unmounted_all(void);
 unsigned char timeout = 0;
 
 int run_state = 0;
-pid_t volume_manager_pid = 0, udevd_pid = 0, agetty1_pid = 0, agetty2_pid = 0;
+pid_t bootlogd_pid = 0, syslogd_pid = 0, klogd_pid = 0, arbitrator_pid = 0, volume_manager_pid = 0, udevd_pid = 0, agetty1_pid = 0, agetty2_pid = 0;
 unsigned char got_sigchild = 0;
 
 void
@@ -86,6 +86,16 @@ main(void)
     {
         (void)fprintf(stderr, "failed to open console");
     }     
+
+    arbitrator_pid = fork();
+    if (!arbitrator_pid)
+    {
+        char * argv[2];
+
+        argv[0] = "early-boot-arbitrator";
+        argv[1] = 0;
+        execv("/sbin/early-boot-arbitrator", argv);
+    }
     
     volume_manager_pid = fork();
     if (!volume_manager_pid) 
@@ -173,50 +183,93 @@ main(void)
     agetty1_pid = fork();
     if (!agetty1_pid)
     {
-        char * argv[5];
-        int fd; 
+        char * argv[7];
+        int fd, s_ret, s_errno; 
 
         close(0);
         close(1);
         close(2);
-        setsid();
-        fd = open("/dev/tty1", O_RDWR);
-        dup2(fd, 0);
-        dup2(fd, 1);
-        dup2(fd, 2);
-        close(fd);        
+        s_ret = setsid();
+        if (s_ret < 0) s_errno = errno;
+        open("/dev/tty0", O_RDONLY);
+        open("/dev/tty0", O_WRONLY);
+        open("/dev/tty0", O_WRONLY);
+        if (s_ret < 0)
+            fprintf(stderr, "%d setsid failed: %s\n", agetty1_pid, strerror(s_errno)); 
 
-        argv[0] = "agetty";
-        argv[1] = "tty1";
-        argv[2] = "9600";
-        argv[3] = "linux";
-        argv[4] = 0;
-        execv("/sbin/agetty", argv);
+        argv[0] = "boot-wrapper";
+        argv[1] = "/sbin/agetty";
+        argv[2] = "agetty";
+        argv[3] = "tty3";
+        argv[4] = "9600";
+        argv[5] = "linux";
+        argv[6] = 0;
+        execv("/sbin/boot-wrapper", argv);
         _exit(4);   
     }
 
     agetty2_pid = fork();
     if (!agetty2_pid)
     {
-        char * argv[5];
+        char * argv[7];
         int fd;
 
         close(0);
         close(1);
         close(2);
         setsid();
-        fd = open("/dev/tty2", O_RDWR);
-        dup2(fd, 0);
-        dup2(fd, 1);
-        dup2(fd, 2);
-        close(fd);        
+        open("/dev/tty0", O_RDONLY);
+        open("/dev/tty0", O_WRONLY);
+        open("/dev/tty0", O_WRONLY);
 
-        argv[0] = "agetty";
-        argv[1] = "tty2";
-        argv[2] = "9600";
-        argv[3] = "linux";
+        argv[0] = "boot-wrapper";
+        argv[1] = "/sbin/agetty";
+        argv[2] = "agetty";
+        argv[3] = "tty2";
+        argv[4] = "9600";
+        argv[5] = "linux";
+        argv[6] = 0;
+        execv("/sbin/boot-wrapper", argv);
+        _exit(4); 
+    }
+ 
+    syslogd_pid = fork();
+    if (0 == syslogd_pid)
+    {
+        char * argv[5];
+        
+        argv[0] = "boot-wrapper";
+        argv[1] = "/sbin/syslogd";
+        argv[2] = "syslogd";
+        argv[3] = "-n"; 
         argv[4] = 0;
-        execv("/sbin/agetty", argv);
+        execv("/sbin/boot-wrapper", argv);
+        _exit(4); 
+    }    
+
+    klogd_pid = fork();
+    if (0 == klogd_pid)
+    {
+        char * argv[5];
+        
+        argv[0] = "boot-wrapper";
+        argv[1] = "/sbin/klogd";
+        argv[2] = "klogd";
+        argv[3] = "-n";
+        argv[4] = 0;
+        execv("/sbin/boot-wrapper", argv);
+        _exit(4); 
+    }
+    
+    bootlogd_pid = fork();
+    if (0 == bootlogd_pid)
+    {
+        char * argv[3];
+        
+        argv[0] = "bootlogd";
+        argv[1] = "-d";
+        argv[2] = 0;
+        execv("/sbin/bootlogd", argv);
         _exit(4); 
     }
 
@@ -234,32 +287,54 @@ main(void)
                 fprintf(stderr, "process-manager: signal received: run_state == %d\n", run_state); 
             } 
         }
-
         if (child_pid == agetty1_pid)
         {
-            agetty1_pid = fork();
-            if (!agetty1_pid)
+            int restart_getty = 0;
+            if (WIFEXITED(status))
             {
-                char * argv[5];
-                int fd;
+                if (0 == WEXITSTATUS(status))
+                {
+                    restart_getty = 1; 
+                }
+                else
+                { 
+                    fprintf(stderr, "agetty 1 %d exited with: %d\n", child_pid, WEXITSTATUS(status));
+                    sleep(10);
+                }
+            }
+            else if (WIFSIGNALED(status))
+            {
+                fprintf(stderr, "agetty 1 %d terminated with signal: %d\n", child_pid, WTERMSIG(status));
+                sleep(10);
+            }
 
-                close(0);
-                close(1);
-                close(2);
-                setsid(); 
-                fd = open("/dev/tty1", O_RDWR);
-                dup2(fd, 0);
-                dup2(fd, 1);
-                dup2(fd, 2);
-                close(fd);        
 
-                argv[0] = "agetty";
-                argv[1] = "tty1";
-                argv[2] = "9600";
-                argv[3] = "linux";
-                argv[4] = 0;
-                execv("/sbin/agetty", argv);
-                _exit(4);
+            if (restart_getty)
+            {
+                agetty1_pid = fork();
+                if (!agetty1_pid)
+                {
+                    char * argv[5];
+                    int fd;
+
+                    close(0);
+                    close(1);
+                    close(2);
+                    setsid(); 
+                    fd = open("/dev/tty0", O_RDWR);
+                    dup2(fd, 0);
+                    dup2(fd, 1);
+                    dup2(fd, 2);
+                    close(fd);        
+
+                    argv[0] = "agetty";
+                    argv[1] = "tty3";
+                    argv[2] = "9600";
+                    argv[3] = "linux";
+                    argv[4] = 0;
+                    execv("/sbin/agetty", argv);
+                    _exit(4);
+                }
             }
         } 
         if (child_pid == agetty2_pid)
@@ -274,7 +349,7 @@ main(void)
                 close(1);
                 close(2);
                 setsid();
-                fd = open("/dev/tty2", O_RDWR);
+                fd = open("/dev/tty0", O_RDWR);
                 dup2(fd, 0);
                 dup2(fd, 1);
                 dup2(fd, 2);
@@ -307,7 +382,7 @@ main(void)
     sig.sa_sigaction = handle_sigalarm;
     sigaction(SIGALRM, &sig, 0); 
 
-    alarm(3);
+    alarm(10);
 
     while (any_child_exists)
     {
@@ -346,18 +421,24 @@ main(void)
             root_busy--;
             fprintf(stderr, "process-manager: retrying unmount\n");
         }
-    } 
+    }
+    fprintf(stderr, "nuke stragglers\n");
+    kill(-1, SIGKILL);
+    sleep(1); 
     if (-1 == umount("/proc"))
     { 
         fprintf(stderr, "failed to umount /proc: %s\n", strerror(errno));
+        sleep(3);
     }
     if (-1 == mount("", "/dev", "", MS_REMOUNT | MS_RDONLY, 0))
     { 
         fprintf(stderr, "failed to remount dev read only: %s\n", strerror(errno));
+        sleep(3);
     }
     if (-1 == mount("", "/", "", MS_REMOUNT | MS_RDONLY, 0))
     { 
         fprintf(stderr, "failed to remount root read only: %s\n", strerror(errno));
+        sleep(3);
     }
 
     sync();
@@ -401,14 +482,14 @@ unmounted_all(void)
                     }
                 }        
             }
-            endmntent(mounts_file);
         }
         else
         {
-            fprintf(stderr, "failed to open /proc/mounts...\n");
+            fprintf(stderr, "failed to open /proc/mounts: %s...\n", strerror(errno));
             sleep(10);  
         } 
         fprintf(stderr, "to_unmount = %d, unmounted = %d\n", to_unmount, unmounted);
+        sleep(3);
         if (to_unmount == unmounted)
             tries = 0;
         else
@@ -417,6 +498,7 @@ unmounted_all(void)
             unmounted = 0;
             tries--;
         }
+        endmntent(mounts_file);
     }
  
     return (to_unmount == unmounted);
