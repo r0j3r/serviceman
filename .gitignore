@@ -14,3 +14,4 @@ test-init-mtab
 etc
 test_notifications
 test_notify
+boot-wrapper
