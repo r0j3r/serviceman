@@ -187,40 +187,21 @@ main(void)
                              } 
                          } 
                      }
-                     i++; 
+                     i += 2; 
                  } 
             }
         }
 
-        if (child_pid == agetty1.pid)
-        {
-            int restart_getty = 0;
-            if (WIFEXITED(status))
-            {
-                if (0 == WEXITSTATUS(status))
-                {
-                    restart_getty = 1; 
-                }
-                else
-                { 
-                    fprintf(stderr, "agetty 1 %d exited with: %d\n", child_pid, WEXITSTATUS(status));
-                    sleep(10);
-                }
-            }
-            else if (WIFSIGNALED(status))
-            {
-                fprintf(stderr, "agetty 1 %d terminated with signal: %d\n", child_pid, WTERMSIG(status));
-                sleep(10);
-            }
-
-            if (restart_getty)
-            {
-                spawn_proc(&agetty1); 
-            }
-        } 
-        else if (restart_proc)
+        if (restart_proc)
         {
             spawn_proc(proc);
+        }
+        else
+        {
+            if (WIFEXITED(status))
+                fprintf(stderr, "process %d exited with %d\n", child_pid, WEXITSTATUS(status));
+            else if (WIFSIGNALED(status)) 
+                fprintf(stderr, "process %d signaled with %d\n", child_pid, WTERMSIG(status));
         }
     }
 
