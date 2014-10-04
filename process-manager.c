@@ -21,7 +21,9 @@ struct child_process
     unsigned char * keepalive_opts; 
     struct child_process * next; 
 };
+static const unsigned char SUCCESSFUL_EXIT = 1;
 
+struct child_process * running;
 
 char * bootlogd_argv[] = {"bootlogd", "-d", 0};
 struct child_process bootlogd = {"/sbin/bootlogd", bootlogd_argv, 0, 0, 0, 0};
@@ -38,11 +40,13 @@ struct child_process udevd = {"/sbin/udevd", udevd_argv, 0, 0, 0, 0};
 char * udev_cold_boot_argv[] = {"udev_cold_boot", 0};
 struct child_process udev_cold_boot = {"/sbin/udev_cold_boot", udev_cold_boot_argv, 0, 0, 0, 0};
 
+unsigned char getty1_keepalive_opts[3] = {1, 1, 0};
 char * agetty1_argv[] = {"boot-wrapper", "/sbin/agetty", "agetty", "tty3", "9600", "linux", 0};
-struct child_process agetty1 = {"/sbin/boot-wrapper", agetty1_argv, 0, 1, 0, 0};
+struct child_process agetty1 = {"/sbin/boot-wrapper", agetty1_argv, 0, 1, getty1_keepalive_opts, 0};
  
+unsigned char getty2_keepalive_opts[5] = {1, 1, 1, 0, 0}; //keepalive even if it crashed
 char * agetty2_argv[] = {"boot-wrapper", "/sbin/agetty", "agetty", "tty2", "9600", "linux", 0};
-struct child_process agetty2 = {"/sbin/boot-wrapper", agetty2_argv, 0, 1, 0, 0};
+struct child_process agetty2 = {"/sbin/boot-wrapper", agetty2_argv, 0, 1, getty2_keepalive_opts, 0};
 
 char * syslogd_argv[] = {"boot-wrapper", "/sbin/syslogd", "syslogd", "-n", 0};
 struct child_process syslogd = {"/sbin/boot-wrapper", syslogd_argv, 0, 0, 0, 0};
@@ -56,6 +60,8 @@ void process_child_shutdown(pid_t);
 int unmounted_all(void);
 unsigned char timeout = 0;
 int spawn_proc(struct child_process *);
+struct child_process * find_process(pid_t);
+struct child_process * get_process(pid_t);
 
 int run_state = 0;
 unsigned char got_sigchild = 0;
@@ -125,6 +131,10 @@ main(void)
         (void)fprintf(stderr, "failed to open console");
     }     
 
+    running = malloc(sizeof(*running));
+    memset(running, 0, sizeof(*running));
+    running->next = running; 
+
     spawn_proc(&arbitrator);
     spawn_proc(&volume_manager);
     spawn_proc(&udevd);
@@ -138,7 +148,9 @@ main(void)
     while(0 == run_state)
     {
         int status;
-        pid_t child_pid; 
+        pid_t child_pid;
+        struct child_process * proc;  
+        unsigned char restart_proc = 0; 
  
         child_pid = wait(&status);
 
@@ -149,6 +161,37 @@ main(void)
                 fprintf(stderr, "process-manager: signal received: run_state == %d\n", run_state); 
             } 
         }
+
+        proc = get_process(child_pid);
+        if (proc)
+        {
+            if (proc->keepalive_opts)
+            {
+                 int i = 0;
+                 while(proc->keepalive_opts[i])
+                 {
+                     if (SUCCESSFUL_EXIT == proc->keepalive_opts[i])
+                     {
+                         if (0 <  proc->keepalive_opts[i + 1])
+                         {
+                             if (WIFEXITED(status))
+                             {
+                                 restart_proc |= 1;
+                             }
+                         }
+                         else
+                         {
+                             if (WIFSIGNALED(status))
+                             {
+                                 restart_proc |= 1;
+                             } 
+                         } 
+                     }
+                     i++; 
+                 } 
+            }
+        }
+
         if (child_pid == agetty1.pid)
         {
             int restart_getty = 0;
@@ -175,9 +218,9 @@ main(void)
                 spawn_proc(&agetty1); 
             }
         } 
-        if (child_pid == agetty2.pid)
+        else if (restart_proc)
         {
-            spawn_proc(&agetty2);
+            spawn_proc(proc);
         }
     }
 
@@ -368,5 +411,40 @@ spawn_proc(struct child_process * c)
     {
         fprintf(stderr, "fork failed: %s\n", strerror(errno));
     }
+    else
+    {
+        c->next = running->next;
+        running->next = c;
+    }
     return c->pid; 
+}
+
+struct child_process *
+find_process(pid_t p)
+{
+    struct child_process * proc; 
+    running->pid = p;
+    for(proc = running->next; proc->pid != p; proc = proc->next);
+    if (proc == running) return 0;
+    else return proc;
+}
+
+struct child_process *
+get_process(pid_t p)
+{
+    struct child_process * proc, * prev; 
+    running->pid = p;
+    prev = running;
+    while(prev->next->pid != p)
+    {
+        prev = prev->next; 
+    }
+    if (prev->next == running) 
+        return 0;
+    else 
+    {
+        proc = prev->next;
+        prev->next = proc->next; 
+        return proc;
+    } 
 }
