@@ -12,14 +12,52 @@
 #include <signal.h>
 #include <mntent.h>
 
+struct child_process
+{
+    char * exec_file_path;
+    char ** argv;
+    pid_t pid;
+    unsigned char login_session;
+    unsigned char * keepalive_opts; 
+    struct child_process * next; 
+};
+
+
+char * bootlogd_argv[] = {"bootlogd", "-d", 0};
+struct child_process bootlogd = {"/sbin/bootlogd", bootlogd_argv, 0, 0, 0, 0};
+
+char * arbitrator_argv[] = {"early-boot-arbitrator", 0};
+struct child_process arbitrator = {"/sbin/early-boot-arbitrator", arbitrator_argv, 0, 0, 0, 0};
+
+char * volume_manager_argv[] = {"volume-manager", 0};
+struct child_process volume_manager = {"/sbin/volume-manager", volume_manager_argv, 0, 0, 0, 0}; 
+
+char * udevd_argv[] = {"udevd", 0};
+struct child_process udevd = {"/sbin/udevd", udevd_argv, 0, 0, 0, 0};
+
+char * udev_cold_boot_argv[] = {"udev_cold_boot", 0};
+struct child_process udev_cold_boot = {"/sbin/udev_cold_boot", udev_cold_boot_argv, 0, 0, 0, 0};
+
+char * agetty1_argv[] = {"boot-wrapper", "/sbin/agetty", "agetty", "tty3", "9600", "linux", 0};
+struct child_process agetty1 = {"/sbin/boot-wrapper", agetty1_argv, 0, 1, 0, 0};
+ 
+char * agetty2_argv[] = {"boot-wrapper", "/sbin/agetty", "agetty", "tty2", "9600", "linux", 0};
+struct child_process agetty2 = {"/sbin/boot-wrapper", agetty2_argv, 0, 1, 0, 0};
+
+char * syslogd_argv[] = {"boot-wrapper", "/sbin/syslogd", "syslogd", "-n", 0};
+struct child_process syslogd = {"/sbin/boot-wrapper", syslogd_argv, 0, 0, 0, 0};
+
+char * klogd_argv[] = {"boot-wrapper", "/sbin/klogd", "klogd", "-n", 0};
+struct child_process klogd = {"/sbin/boot-wrapper", klogd_argv, 0, 0, 0, 0};
+
 int setctty(char *);
 unsigned char any_child_exists(void);
 void process_child_shutdown(pid_t);
 int unmounted_all(void);
 unsigned char timeout = 0;
+int spawn_proc(struct child_process *);
 
 int run_state = 0;
-pid_t bootlogd_pid = 0, syslogd_pid = 0, klogd_pid = 0, arbitrator_pid = 0, volume_manager_pid = 0, udevd_pid = 0, agetty1_pid = 0, agetty2_pid = 0;
 unsigned char got_sigchild = 0;
 
 void
@@ -49,8 +87,7 @@ handle_sigalarm(int num, siginfo_t * info, void * b)
 int
 main(void)
 {
-    int fd, wait_status;
-    pid_t udevadm_pid;
+    int fd;
     struct sigaction sig;
 
     (void)fprintf(stderr, "process-manager: process-manager starting...\n");
@@ -88,190 +125,15 @@ main(void)
         (void)fprintf(stderr, "failed to open console");
     }     
 
-    arbitrator_pid = fork();
-    if (!arbitrator_pid)
-    {
-        char * argv[2];
-
-        argv[0] = "early-boot-arbitrator";
-        argv[1] = 0;
-        execv("/sbin/early-boot-arbitrator", argv);
-    }
-    
-    volume_manager_pid = fork();
-    if (!volume_manager_pid) 
-    {
-        char * argv[2];
-
-        argv[0] = "volume-manager";
-        argv[1] = 0; 
-        execv("/sbin/volume-manager", argv);
-        _exit(4);
-    }
-
-    udevd_pid = fork();
-    if (!udevd_pid)
-    {
-        char * argv[2];
-
-        argv[0] = "udevd";
-        argv[1] = 0;
-        execv("/sbin/udevd", argv);
-        _exit(4);  
-    }
-
-    (void)fprintf(stderr, "loading subsystems...\n");
-    udevadm_pid = fork();
-    if (!udevadm_pid)
-    {
-        char * argv[4];
-
-        argv[0] = "udevadm";
-        argv[1] = "trigger";
-        argv[2] = "--type=subsystems";
-        argv[3] = 0;
-        execv("/sbin/udevadm", argv);
-        _exit(4);
-    }
-
-    wait(&wait_status);
-
-    udevadm_pid = fork();
-    if (!udevadm_pid)
-    {
-        char * argv[3];
-
-        argv[0] = "udevadm";
-        argv[1] = "settle";
-        argv[2] = 0;
-        execv("/sbin/udevadm", argv);
-        _exit(4);
-    }
-
-    wait(&wait_status);
-
-    (void)fprintf(stderr, "loading devices...\n");
-
-    udevadm_pid = fork();
-    if (!udevadm_pid)
-    {
-        char * argv[4];
-
-        argv[0] = "udevadm";
-        argv[1] = "trigger";
-        argv[2] = "--type=devices";
-        argv[3] = 0;
-        execv("/sbin/udevadm", argv);
-        _exit(4);
-    }
-
-    wait(&wait_status);
-
-    udevadm_pid = fork();
-    if (!udevadm_pid)
-    {
-        char * argv[3];
-
-        argv[0] = "udevadm";
-        argv[1] = "settle";
-        argv[2] = 0;
-        execv("/sbin/udevadm", argv);
-        _exit(4);
-    }
-
-    wait(&wait_status);
-
-    agetty1_pid = fork();
-    if (!agetty1_pid)
-    {
-        char * argv[7];
-        int s_ret, s_errno; 
-
-        close(0);
-        close(1);
-        close(2);
-        s_ret = setsid();
-        if (s_ret < 0) s_errno = errno;
-        open("/dev/tty0", O_RDONLY);
-        open("/dev/tty0", O_WRONLY);
-        open("/dev/tty0", O_WRONLY);
-        if (s_ret < 0)
-            fprintf(stderr, "%d setsid failed: %s\n", agetty1_pid, strerror(s_errno)); 
-
-        argv[0] = "boot-wrapper";
-        argv[1] = "/sbin/agetty";
-        argv[2] = "agetty";
-        argv[3] = "tty3";
-        argv[4] = "9600";
-        argv[5] = "linux";
-        argv[6] = 0;
-        execv("/sbin/boot-wrapper", argv);
-        _exit(4);   
-    }
-
-    agetty2_pid = fork();
-    if (!agetty2_pid)
-    {
-        char * argv[7];
-
-        close(0);
-        close(1);
-        close(2);
-        setsid();
-        open("/dev/tty0", O_RDONLY);
-        open("/dev/tty0", O_WRONLY);
-        open("/dev/tty0", O_WRONLY);
-
-        argv[0] = "boot-wrapper";
-        argv[1] = "/sbin/agetty";
-        argv[2] = "agetty";
-        argv[3] = "tty2";
-        argv[4] = "9600";
-        argv[5] = "linux";
-        argv[6] = 0;
-        execv("/sbin/boot-wrapper", argv);
-        _exit(4); 
-    }
- 
-    syslogd_pid = fork();
-    if (0 == syslogd_pid)
-    {
-        char * argv[5];
-        
-        argv[0] = "boot-wrapper";
-        argv[1] = "/sbin/syslogd";
-        argv[2] = "syslogd";
-        argv[3] = "-n"; 
-        argv[4] = 0;
-        execv("/sbin/boot-wrapper", argv);
-        _exit(4); 
-    }    
-
-    klogd_pid = fork();
-    if (0 == klogd_pid)
-    {
-        char * argv[5];
-        
-        argv[0] = "boot-wrapper";
-        argv[1] = "/sbin/klogd";
-        argv[2] = "klogd";
-        argv[3] = "-n";
-        argv[4] = 0;
-        execv("/sbin/boot-wrapper", argv);
-        _exit(4); 
-    }
-    
-    bootlogd_pid = fork();
-    if (0 == bootlogd_pid)
-    {
-        char * argv[3];
-        
-        argv[0] = "bootlogd";
-        argv[1] = "-d";
-        argv[2] = 0;
-        execv("/sbin/bootlogd", argv);
-        _exit(4); 
-    }
+    spawn_proc(&arbitrator);
+    spawn_proc(&volume_manager);
+    spawn_proc(&udevd);
+    spawn_proc(&udev_cold_boot);
+    spawn_proc(&agetty1);
+    spawn_proc(&agetty2);
+    spawn_proc(&syslogd); 
+    spawn_proc(&klogd);
+    spawn_proc(&bootlogd);
 
     while(0 == run_state)
     {
@@ -287,7 +149,7 @@ main(void)
                 fprintf(stderr, "process-manager: signal received: run_state == %d\n", run_state); 
             } 
         }
-        if (child_pid == agetty1_pid)
+        if (child_pid == agetty1.pid)
         {
             int restart_getty = 0;
             if (WIFEXITED(status))
@@ -308,59 +170,14 @@ main(void)
                 sleep(10);
             }
 
-
             if (restart_getty)
             {
-                agetty1_pid = fork();
-                if (!agetty1_pid)
-                {
-                    char * argv[5];
-                    
-                    close(0);
-                    close(1);
-                    close(2);
-
-                    setsid(); 
-
-                    open("/dev/tty0", O_RDONLY);
-                    open("/dev/tty0", O_WRONLY);
-                    open("/dev/tty0", O_WRONLY);
-                    
-                    argv[0] = "agetty";
-                    argv[1] = "tty3";
-                    argv[2] = "9600";
-                    argv[3] = "linux";
-                    argv[4] = 0;
-                    execv("/sbin/agetty", argv);
-                    _exit(4);
-                }
+                spawn_proc(&agetty1); 
             }
         } 
-        if (child_pid == agetty2_pid)
+        if (child_pid == agetty2.pid)
         {
-            agetty2_pid = fork();
-            if (!agetty2_pid)
-            {
-                char * argv[5];
-                
-                close(0);
-                close(1);
-                close(2);
-
-                setsid();
-
-                open("/dev/tty0", O_RDONLY);
-                open("/dev/tty0", O_WRONLY);
-                open("/dev/tty0", O_WRONLY);
-
-                argv[0] = "agetty";
-                argv[1] = "tty2";
-                argv[2] = "9600";
-                argv[3] = "linux";
-                argv[4] = 0;
-                execv("/sbin/agetty", argv);
-                _exit(4);
-            }
+            spawn_proc(&agetty2);
         }
     }
 
@@ -496,7 +313,11 @@ unmounted_all(void)
                     }
                     else
                     {
-                        fprintf(stderr, "unmount failed: %s\n", strerror(errno)); 
+                        fprintf(stderr, "unmount failed: %s\n", strerror(errno));
+                        if (-1 == mount("", entry->mnt_dir, 0, MS_REMOUNT|MS_RDONLY, 0))
+                        {
+                            fprintf(stderr, "remount %s readonly failed: %s\n", entry->mnt_dir, strerror(errno));
+                        }   
                     }
                 }        
             }
@@ -520,4 +341,32 @@ unmounted_all(void)
     }
  
     return (to_unmount == unmounted);
+}
+
+int
+spawn_proc(struct child_process * c)
+{
+    c->pid = fork();
+    if (0 == c->pid)
+    {
+        if (c->login_session)
+        {
+            close(0);
+            close(1);
+            close(2);
+
+            setsid();
+
+            open("/dev/tty0", O_RDONLY);
+            open("/dev/tty0", O_WRONLY);
+            open("/dev/tty0", O_WRONLY);
+        } 
+        execv(c->exec_file_path, c->argv);
+        _exit(4);
+    }
+    else if (-1 == c->pid)
+    {
+        fprintf(stderr, "fork failed: %s\n", strerror(errno));
+    }
+    return c->pid; 
 }
