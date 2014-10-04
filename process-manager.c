@@ -79,7 +79,8 @@ main(void)
         dup2(fd,0); 
         dup2(fd,1);
         dup2(fd,2);
-        close(fd);
+        if (fd > 2)
+            close(fd);
         (void)fprintf(stderr, "process-manager: console reopened...\n");
     }
     else
@@ -184,7 +185,7 @@ main(void)
     if (!agetty1_pid)
     {
         char * argv[7];
-        int fd, s_ret, s_errno; 
+        int s_ret, s_errno; 
 
         close(0);
         close(1);
@@ -212,7 +213,6 @@ main(void)
     if (!agetty2_pid)
     {
         char * argv[7];
-        int fd;
 
         close(0);
         close(1);
@@ -315,18 +315,17 @@ main(void)
                 if (!agetty1_pid)
                 {
                     char * argv[5];
-                    int fd;
-
+                    
                     close(0);
                     close(1);
                     close(2);
-                    setsid(); 
-                    fd = open("/dev/tty0", O_RDWR);
-                    dup2(fd, 0);
-                    dup2(fd, 1);
-                    dup2(fd, 2);
-                    close(fd);        
 
+                    setsid(); 
+
+                    open("/dev/tty0", O_RDONLY);
+                    open("/dev/tty0", O_WRONLY);
+                    open("/dev/tty0", O_WRONLY);
+                    
                     argv[0] = "agetty";
                     argv[1] = "tty3";
                     argv[2] = "9600";
@@ -343,17 +342,16 @@ main(void)
             if (!agetty2_pid)
             {
                 char * argv[5];
-                int fd;
-
+                
                 close(0);
                 close(1);
                 close(2);
+
                 setsid();
-                fd = open("/dev/tty0", O_RDWR);
-                dup2(fd, 0);
-                dup2(fd, 1);
-                dup2(fd, 2);
-                close(fd);        
+
+                open("/dev/tty0", O_RDONLY);
+                open("/dev/tty0", O_WRONLY);
+                open("/dev/tty0", O_WRONLY);
 
                 argv[0] = "agetty";
                 argv[1] = "tty2";
@@ -392,7 +390,7 @@ main(void)
             if (ECHILD == errno) 
             {
                 any_child_exists = 0;
-                fprintf(stderr, "process-manager: no children remains...\n");
+                fprintf(stderr, "process-manager: no more processes left...\n");
             }
             else if (EINTR == errno)
             {
@@ -406,6 +404,17 @@ main(void)
         }   
     }
 
+    fprintf(stderr, "nuke stragglers\n");
+    kill(-1, SIGKILL);
+    sleep(1); 
+
+    if (-1 == mount("", "/", 0, MS_REMOUNT | MS_RDONLY, 0))
+    { 
+        fprintf(stderr, "failed to remount root read only: %s\n", strerror(errno));
+    }
+
+    sync();
+
     unsigned char root_busy = 5;
     while(root_busy)
     {
@@ -415,33 +424,42 @@ main(void)
         } 
         else
         {
-            fprintf(stderr, "process-manager: unmount failed: sending SIGKILL to stragglers...\n");
-            kill(-1, SIGKILL);
+            kill(-1, SIGKILL); 
             sleep(1);
             root_busy--;
             fprintf(stderr, "process-manager: retrying unmount\n");
         }
     }
-    fprintf(stderr, "nuke stragglers\n");
-    kill(-1, SIGKILL);
-    sleep(1); 
+
     if (-1 == umount("/proc"))
     { 
         fprintf(stderr, "failed to umount /proc: %s\n", strerror(errno));
         sleep(3);
     }
-    if (-1 == mount("", "/dev", "", MS_REMOUNT | MS_RDONLY, 0))
+    if (-1 == umount("/dev"))
     { 
-        fprintf(stderr, "failed to remount dev read only: %s\n", strerror(errno));
-        sleep(3);
+        fprintf(stderr, "failed to umount /dev: %s\nremounting read only...\n", strerror(errno));
+        if (-1 == mount("", "/dev", 0, MS_REMOUNT | MS_RDONLY, 0))
+        { 
+            fprintf(stderr, "failed to remount /dev read only: %s\n", strerror(errno));
+            sleep(3);
+        }
     }
-    if (-1 == mount("", "/", "", MS_REMOUNT | MS_RDONLY, 0))
+
+    if (-1 == mount("", "/", 0, MS_REMOUNT | MS_RDONLY, 0))
     { 
         fprintf(stderr, "failed to remount root read only: %s\n", strerror(errno));
         sleep(3);
     }
 
     sync();
+
+    if (-1 == umount("/"))
+    { 
+        fprintf(stderr, "failed to umount /: %s\n", strerror(errno));
+        sleep(3);
+    }
+
     reboot(run_state); 
     while(1);
         pause();      
