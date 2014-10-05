@@ -9,50 +9,56 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/reboot.h>
+#include <sys/time.h>
 #include <signal.h>
 #include <mntent.h>
 
 struct child_process
 {
+    struct child_process * next; 
+    pid_t pid;
     char * exec_file_path;
     char ** argv;
-    pid_t pid;
     unsigned char login_session;
-    unsigned char * keepalive_opts; 
-    struct child_process * next; 
+    char * label;
+    unsigned char * keepalive_opts;
+    unsigned int throttle_count;
+    struct timeval last_restart;
 };
+
 static const unsigned char SUCCESSFUL_EXIT = 1;
 
 struct child_process * running;
+struct child_process * waiting;
 
 char * bootlogd_argv[] = {"bootlogd", "-d", 0};
-struct child_process bootlogd = {"/sbin/bootlogd", bootlogd_argv, 0, 0, 0, 0};
+struct child_process bootlogd = {0, 0, "/sbin/bootlogd", bootlogd_argv, 0, "bootlogd", 0, 0, {0, 0}};
 
 char * arbitrator_argv[] = {"early-boot-arbitrator", 0};
-struct child_process arbitrator = {"/sbin/early-boot-arbitrator", arbitrator_argv, 0, 0, 0, 0};
+struct child_process arbitrator = {0, 0, "/sbin/early-boot-arbitrator", arbitrator_argv, 0, "arbitrator", 0, 0, {0, 0}};
 
 char * volume_manager_argv[] = {"volume-manager", 0};
-struct child_process volume_manager = {"/sbin/volume-manager", volume_manager_argv, 0, 0, 0, 0}; 
+struct child_process volume_manager = {0, 0, "/sbin/volume-manager", volume_manager_argv, 0, "volume-manager", 0, 0, {0, 0}}; 
 
 char * udevd_argv[] = {"udevd", 0};
-struct child_process udevd = {"/sbin/udevd", udevd_argv, 0, 0, 0, 0};
+struct child_process udevd = {0, 0, "/sbin/udevd", udevd_argv, 0, "udev", 0, 0, {0, 0}};
 
 char * udev_cold_boot_argv[] = {"udev_cold_boot", 0};
-struct child_process udev_cold_boot = {"/sbin/udev_cold_boot", udev_cold_boot_argv, 0, 0, 0, 0};
+struct child_process udev_cold_boot = {0, 0, "/sbin/udev_cold_boot", udev_cold_boot_argv, 0, "udev_cold_boot", 0, 0, {0, 0}};
 
 unsigned char getty1_keepalive_opts[3] = {1, 1, 0};
 char * agetty1_argv[] = {"boot-wrapper", "/sbin/agetty", "agetty", "tty3", "9600", "linux", 0};
-struct child_process agetty1 = {"/sbin/boot-wrapper", agetty1_argv, 0, 1, getty1_keepalive_opts, 0};
+struct child_process agetty1 = {0, 0, "/sbin/boot-wrapper", agetty1_argv, 1, "agetty1", getty1_keepalive_opts, 0, {0, 0}};
  
 unsigned char getty2_keepalive_opts[5] = {1, 1, 1, 0, 0}; //keepalive even if it crashed
 char * agetty2_argv[] = {"boot-wrapper", "/sbin/agetty", "agetty", "tty2", "9600", "linux", 0};
-struct child_process agetty2 = {"/sbin/boot-wrapper", agetty2_argv, 0, 1, getty2_keepalive_opts, 0};
+struct child_process agetty2 = {0, 0, "/sbin/boot-wrapper", agetty2_argv, 1, "agetty2", getty2_keepalive_opts, 0, {0, 0}};
 
 char * syslogd_argv[] = {"boot-wrapper", "/sbin/syslogd", "syslogd", "-n", 0};
-struct child_process syslogd = {"/sbin/boot-wrapper", syslogd_argv, 0, 0, 0, 0};
+struct child_process syslogd = {0, 0, "/sbin/boot-wrapper", syslogd_argv, 0, "syslogd", 0, 0, {0, 0}};
 
 char * klogd_argv[] = {"boot-wrapper", "/sbin/klogd", "klogd", "-n", 0};
-struct child_process klogd = {"/sbin/boot-wrapper", klogd_argv, 0, 0, 0, 0};
+struct child_process klogd = {0, 0, "/sbin/boot-wrapper", klogd_argv, 0, "klogd", 0, 0, {0, 0}};
 
 int setctty(char *);
 unsigned char any_child_exists(void);
@@ -62,6 +68,8 @@ unsigned char timeout = 0;
 int spawn_proc(struct child_process *);
 struct child_process * find_process(pid_t);
 struct child_process * get_process(pid_t);
+void queue_proc(struct child_process *);
+struct child_process * dequeue_proc(void);
 
 int run_state = 0;
 unsigned char got_sigchild = 0;
@@ -116,6 +124,12 @@ main(void)
     sig.sa_sigaction = handle_sigchild;
     sigaction(SIGCHLD, &sig, 0);
        
+    memset(&sig, 0, sizeof(sig));
+    sigfillset(&sig.sa_mask);
+    sig.sa_flags = SA_SIGINFO;
+    sig.sa_sigaction = handle_sigalarm;
+    sigaction(SIGALRM, &sig, 0); 
+
     fd = open("/dev/console", O_RDWR | O_NOCTTY);
     if (fd >= 0)
     {
@@ -135,6 +149,12 @@ main(void)
     memset(running, 0, sizeof(*running));
     running->next = running; 
 
+    waiting = malloc(sizeof(*waiting));
+    memset(waiting, 0, sizeof(*waiting));
+    waiting->next = waiting;
+    waiting->pid = 0x7fffffff;
+    waiting->last_restart.tv_sec = 0x7fffffffffffffff; 
+
     spawn_proc(&arbitrator);
     spawn_proc(&volume_manager);
     spawn_proc(&udevd);
@@ -152,56 +172,94 @@ main(void)
         struct child_process * proc;  
         unsigned char restart_proc = 0; 
  
+        if (waiting->next != waiting)
+        {
+            struct timeval now;
+            gettimeofday(&now, 0);
+            alarm(waiting->next->last_restart.tv_sec - now.tv_sec); 
+        }
+
+        timeout = 0; 
+        fprintf(stderr, "waiting for exiting childern...\n");
         child_pid = wait(&status);
 
         if (child_pid < 0)
         {
             if (errno == EINTR)
             {
-                fprintf(stderr, "process-manager: signal received: run_state == %d\n", run_state); 
+                fprintf(stderr, "process-manager: signal received: run_state == %d\n", run_state);
+                if (timeout)
+                {
+                    timeout = 0;
+                    struct child_process * c = dequeue_proc();
+                    spawn_proc(c);
+                }  
             } 
-        }
-
-        proc = get_process(child_pid);
-        if (proc)
-        {
-            if (proc->keepalive_opts)
-            {
-                 int i = 0;
-                 while(proc->keepalive_opts[i])
-                 {
-                     if (SUCCESSFUL_EXIT == proc->keepalive_opts[i])
-                     {
-                         if (0 <  proc->keepalive_opts[i + 1])
-                         {
-                             if (WIFEXITED(status))
-                             {
-                                 restart_proc |= 1;
-                             }
-                         }
-                         else
-                         {
-                             if (WIFSIGNALED(status))
-                             {
-                                 restart_proc |= 1;
-                             } 
-                         } 
-                     }
-                     i += 2; 
-                 } 
-            }
-        }
-
-        if (restart_proc)
-        {
-            spawn_proc(proc);
         }
         else
         {
-            if (WIFEXITED(status))
-                fprintf(stderr, "process %d exited with %d\n", child_pid, WEXITSTATUS(status));
-            else if (WIFSIGNALED(status)) 
-                fprintf(stderr, "process %d signaled with %d\n", child_pid, WTERMSIG(status));
+            proc = get_process(child_pid);
+            if (proc)
+            {
+                restart_proc = 0; 
+                if (proc->keepalive_opts)
+                {
+                    int i = 0;
+                    while(proc->keepalive_opts[i])
+                    {
+                        if (SUCCESSFUL_EXIT == proc->keepalive_opts[i])
+                        {
+                            if (0 <  proc->keepalive_opts[i + 1])
+                            {
+                                if (WIFEXITED(status))
+                                {
+                                    restart_proc |= 1;
+                                }
+                            }
+                            else
+                            {
+                                if (WIFSIGNALED(status))
+                                {
+                                    restart_proc |= 1;
+                                } 
+                            } 
+                        }
+                        i += 2; 
+                    } 
+                }
+            
+                if (restart_proc)
+                {
+                    struct timeval now;
+                    gettimeofday(&now, 0);
+                    if ((proc->last_restart.tv_sec + 10) < now.tv_sec)
+                    {
+                        gettimeofday(&proc->last_restart, 0);
+                        spawn_proc(proc);
+                    }
+                    else
+                    {
+                        if (proc->throttle_count < 40)
+                        {  
+                            gettimeofday(&proc->last_restart, 0);
+                            proc->last_restart.tv_sec += 10;
+                            proc->throttle_count++;
+                            queue_proc(proc);
+                        } 
+                        else
+                        {
+                            fprintf(stderr, "%s exceeded throttle limit\n", proc->label);
+                        } 
+                    } 
+                }
+                else
+                {
+                    if (WIFEXITED(status))
+                        fprintf(stderr, "process %s exited with %d\n", proc->label, WEXITSTATUS(status));
+                    else if (WIFSIGNALED(status)) 
+                        fprintf(stderr, "process %s signaled with %d\n", proc->label, WTERMSIG(status));
+                }
+            }
         }
     }
 
@@ -215,12 +273,6 @@ main(void)
         fprintf(stderr, "process-manager: kill failed: %s\n", strerror(errno));
     }
     
-    memset(&sig, 0, sizeof(sig));
-    sigfillset(&sig.sa_mask);
-    sig.sa_flags = SA_SIGINFO;
-    sig.sa_sigaction = handle_sigalarm;
-    sigaction(SIGALRM, &sig, 0); 
-
     alarm(10);
 
     while (any_child_exists)
@@ -428,4 +480,28 @@ get_process(pid_t p)
         prev->next = proc->next; 
         return proc;
     } 
+}
+
+void
+queue_proc(struct child_process * c)
+{
+    struct child_process * proc;
+
+    for(proc = waiting; proc->next->last_restart.tv_sec < c->last_restart.tv_sec; proc = proc->next);
+    c->next = proc->next;
+    proc->next = c;
+}
+
+struct child_process *
+dequeue_proc(void)
+{
+    struct child_process * p;
+    if (waiting->next != waiting)
+    {
+        p = waiting->next;
+        waiting->next = p->next;
+        p->next = 0; 
+        return p;  
+    }
+    return 0; 
 }
