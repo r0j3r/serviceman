@@ -7,3 +7,11 @@ servctl
 parse_services
 daemons
 agents
+process-manager
+volume-manager
+early-boot-arbitrator
+test-init-mtab
+etc
+test_notifications
+test_notify
+boot-wrapper
