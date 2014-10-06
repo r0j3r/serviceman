@@ -154,6 +154,13 @@ main(void)
         (void)fprintf(stderr, "failed to open console");
     }     
 
+    if (-1 == mount("none", "/run", "tmpfs", 0, 0))
+    {
+        fprintf(stderr, "failed to mount tmpfs on /run\n", strerror(errno));
+        while(1)
+            pause();
+    }
+
     running = malloc(sizeof(*running));
     memset(running, 0, sizeof(*running));
     running->next = running; 
@@ -170,6 +177,14 @@ main(void)
     int ctl_p_endp = launch_control_proc(&ctl_un, &ctl_len, &ctl_pid);
 
     spawn_proc(&arbitrator);
+    int arbitrator_checked_in = 0;
+    while(!arbitrator_checked_in)
+    {   
+        recvfrom();
+        if (arbitrator_magic_packet())
+            arbitrator_checked_in = 1;
+        sendto();  
+    }
     spawn_proc(&volume_manager);
     spawn_proc(&udevd);
     spawn_proc(&udev_cold_boot);
@@ -195,6 +210,7 @@ main(void)
         }
 
         timeout = 0; 
+
         fprintf(stderr, "waiting for exiting childern...\n");
         unsigned char data[1024];
         unsigned int len = sizeof(data);

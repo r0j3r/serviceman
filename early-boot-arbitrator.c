@@ -80,8 +80,6 @@ main(void)
     memset(resources, 0, sizeof(*resources));
     resources->next = resources; 
 
-    mount("none", "/run", "tmpfs", 0, 0);
-
     running = 1;
     endp = create_endpoint("/run/early-boot-arbit");
     if (endp < 0)
