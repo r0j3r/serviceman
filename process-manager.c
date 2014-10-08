@@ -156,7 +156,7 @@ main(void)
 
     if (-1 == mount("none", "/run", "tmpfs", 0, 0))
     {
-        fprintf(stderr, "failed to mount tmpfs on /run\n", strerror(errno));
+        fprintf(stderr, "failed to mount tmpfs on /run: %s\n", strerror(errno));
         while(1)
             pause();
     }
@@ -177,14 +177,6 @@ main(void)
     int ctl_p_endp = launch_control_proc(&ctl_un, &ctl_len, &ctl_pid);
 
     spawn_proc(&arbitrator);
-    int arbitrator_checked_in = 0;
-    while(!arbitrator_checked_in)
-    {   
-        recvfrom();
-        if (arbitrator_magic_packet())
-            arbitrator_checked_in = 1;
-        sendto();  
-    }
     spawn_proc(&volume_manager);
     spawn_proc(&udevd);
     spawn_proc(&udev_cold_boot);
