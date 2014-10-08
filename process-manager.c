@@ -72,6 +72,7 @@ struct child_process * find_process(pid_t);
 struct child_process * get_process(pid_t);
 void queue_proc(struct child_process *);
 struct child_process * dequeue_proc(void);
+int handle_data(unsigned char *, unsigned int);
 
 int run_state = 0;
 unsigned char got_sigchild = 0;
@@ -292,6 +293,10 @@ main(void)
                     }
                 }
             }  
+        }
+        else
+        {
+            handle_data(data, len);
         }
     }
 
@@ -536,4 +541,10 @@ dequeue_proc(void)
         return p;  
     }
     return 0; 
+}
+
+int
+handle_data(unsigned char * d, unsigned int len)
+{
+    return 0;
 }
