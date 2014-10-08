@@ -10,6 +10,7 @@
 #include "message.h"
  
 struct request * create_request_buf(unsigned int);
+extern unsigned char timeout;
 
 int
 create_endpoint(unsigned char * name)
@@ -47,7 +48,6 @@ create_endpoint(unsigned char * name)
                 memset(&u, 0, sizeof(u));
                 u.sun_family = AF_UNIX;
                 strcpy(u.sun_path, name);
-            
                 int ret = sendto(fd, p, sizeof(p), 0, (struct sockaddr *)&u, sizeof(u.sun_family) + strlen(name));
                 if (-1 == ret) 
                 {
@@ -58,18 +58,21 @@ create_endpoint(unsigned char * name)
                         try_bind--;
                         fprintf(stderr, "retrying bind %s\n", name);
                     }
-                    else
-                    {
-                        fprintf(stderr, "failed to bind %s\n", name);
-                        try_bind = 0;
-                        close(fd);
-                        fd = -2;
+                    else 
+                    {  
                     }
                 }  
                 else
                 {
                     char data[1024];
+                    alarm(1);
+                    timeout = 0;      
                     ret = read(fd, data, sizeof(data));
+                    if (EINTR == errno)
+                    {
+                        if (timeout)
+                            timeout = 0;
+                    }
                     try_bind = 0;
                     close(fd);
                     fd = -3;
@@ -126,7 +129,7 @@ send_notify(int fd, unsigned char resource_id[16], unsigned char endp_name[16])
     memcpy(r->sender_endp, endp_name, MP_ID_LEN);
     memcpy(r->data, &status_code, 4);
     r->data_len = 4;
-    int ret = send_message(fd, "early-boot-arbit", 16, r, sizeof(*r));
+    int ret = send_message(fd, (unsigned char *)"early-boot-arbit", 16, (unsigned char *)r, sizeof(*r));
     unsigned char data[4096];
     if (-1 == read(fd, data, 4096))
     {

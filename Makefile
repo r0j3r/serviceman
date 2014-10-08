@@ -1,12 +1,14 @@
+
 CC=gcc
 CFLAGS=-fPIE -flto -O -g -Wall -std=gnu99 -pedantic -march=native
 LDFLAGS=-fPIE -flto -fuse-linker-plugin -O -g -Wall -std=gnu99 -pedantic -march=native
+
 serv: serv.o protocol.o
 protocol.o: protocol.h protocol.c
 serv.o: serv.c protocol.h error.h
 servctl: servctl.o protocol.o
 servctl.o: servctl.c protocol.h error.h 
-process-manager: process-manager.o
+process-manager: process-manager.o notification.o message.o control_proc.o
 volume-manager: volume-manager.o notification.o message.o
 volume-manager.o: notification.h
 notification.o: notification.h

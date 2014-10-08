@@ -14,6 +14,7 @@
 #include <sys/time.h>
 #include <signal.h>
 #include <mntent.h>
+#include "servctl.h"
 
 struct child_process
 {
@@ -66,7 +67,6 @@ int setctty(char *);
 unsigned char any_child_exists(void);
 void process_child_shutdown(pid_t);
 int unmounted_all(void);
-unsigned char timeout = 0;
 int spawn_proc(struct child_process *);
 struct child_process * find_process(pid_t);
 struct child_process * get_process(pid_t);
@@ -75,22 +75,27 @@ struct child_process * dequeue_proc(void);
 
 int run_state = 0;
 unsigned char got_sigchild = 0;
+unsigned char timeout = 0;
+int signum;
 
 void
 handle_sigusr1(int num, siginfo_t * info, void * b)
 {
+    signum = num; 
     run_state = RB_POWER_OFF;
 }
 
 void
 handle_sigterm(int num, siginfo_t * info, void * b)
 {
+    signum = num; 
     run_state = RB_AUTOBOOT;
 }
 
 void
 handle_sigchild(int num, siginfo_t * info, void * b)
 {
+    signum = num; 
     got_sigchild = 1;
 }
 
@@ -98,6 +103,7 @@ void
 handle_sigalarm(int num, siginfo_t * info, void * b)
 {
     timeout = 1;
+    signum = num; 
 }
 
 int
@@ -157,6 +163,11 @@ main(void)
     waiting->pid = 0x7fffffff;
     waiting->last_restart.tv_sec = 0x7fffffffffffffff; 
 
+    struct sockaddr_un ctl_un;
+    pid_t ctl_pid;
+    socklen_t ctl_len; 
+    int ctl_p_endp = launch_control_proc(&ctl_un, &ctl_len, &ctl_pid);
+
     spawn_proc(&arbitrator);
     spawn_proc(&volume_manager);
     spawn_proc(&udevd);
@@ -170,10 +181,11 @@ main(void)
     while(0 == run_state)
     {
         int status;
-        pid_t child_pid;
+        pid_t child_pid = -1;
         struct child_process * proc;  
         unsigned char restart_proc = 0; 
- 
+        int w_errno = 0; 
+
         if (waiting->next != waiting)
         {
             struct timeval now;
@@ -183,9 +195,9 @@ main(void)
 
         timeout = 0; 
         fprintf(stderr, "waiting for exiting childern...\n");
-        child_pid = wait(&status);
-
-        if (child_pid < 0)
+        unsigned char data[1024];
+        unsigned int len = sizeof(data);
+        if (-1 == recvfrom(ctl_p_endp, data, len, 0, &ctl_un, &ctl_len))
         {
             if (errno == EINTR)
             {
@@ -193,14 +205,30 @@ main(void)
                 if (timeout)
                 {
                     timeout = 0;
-                    struct child_process * c = dequeue_proc();
-                    spawn_proc(c);
-                }  
-            } 
+                    struct timeval now;
+                    gettimeofday(&now, 0);  
+                    while(waiting->next->last_restart.tv_sec < now.tv_sec)
+                    { 
+                        struct child_process * c = dequeue_proc();
+                        spawn_proc(c);
+                    }
+                }
+                if (got_sigchild)
+                {
+                    got_sigchild = 0;
+                    child_pid = waitpid(-1, &status, WNOHANG);
+                    w_errno = errno;
+                }
+            }  
+        }
+        if (child_pid < 0)
+        {
+            fprintf(stderr, "faild to get child status: %s\n", strerror(w_errno));  
         }
         else
         {
             proc = get_process(child_pid);
+            child_pid = -1;
             if (proc)
             {
                 restart_proc = 0; 
