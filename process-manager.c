@@ -216,80 +216,82 @@ main(void)
                 if (got_sigchild)
                 {
                     got_sigchild = 0;
-                    child_pid = waitpid(-1, &status, WNOHANG);
-                    w_errno = errno;
-                }
-            }  
-        }
-        if (child_pid < 0)
-        {
-            fprintf(stderr, "faild to get child status: %s\n", strerror(w_errno));  
-        }
-        else
-        {
-            proc = get_process(child_pid);
-            child_pid = -1;
-            if (proc)
-            {
-                restart_proc = 0; 
-                if (proc->keepalive_opts)
-                {
-                    int i = 0;
-                    while(proc->keepalive_opts[i])
+                    while((child_pid = waitpid(-1, &status, WNOHANG)))
                     {
-                        if (SUCCESSFUL_EXIT == proc->keepalive_opts[i])
+                        if (child_pid < 0)
                         {
-                            if (0 <  proc->keepalive_opts[i + 1])
-                            {
-                                if (WIFEXITED(status))
-                                {
-                                    restart_proc |= 1;
-                                }
-                            }
-                            else
-                            {
-                                if (WIFSIGNALED(status))
-                                {
-                                    restart_proc |= 1;
-                                } 
-                            } 
+                            fprintf(stderr, "faild to get child status: %s\n", strerror(w_errno));
+                            if (ECHILD == errno) break;  
                         }
-                        i += 2; 
-                    } 
-                }
-            
-                if (restart_proc)
-                {
-                    struct timeval now;
-                    gettimeofday(&now, 0);
-                    if ((proc->last_restart.tv_sec + 10) < now.tv_sec)
-                    {
-                        gettimeofday(&proc->last_restart, 0);
-                        spawn_proc(proc);
-                    }
-                    else
-                    {
-                        if (proc->throttle_count < 40)
-                        {  
-                            gettimeofday(&proc->last_restart, 0);
-                            proc->last_restart.tv_sec += 10;
-                            proc->throttle_count++;
-                            queue_proc(proc);
-                        } 
                         else
                         {
-                            fprintf(stderr, "%s exceeded throttle limit\n", proc->label);
-                        } 
-                    } 
+                            proc = get_process(child_pid);
+                            child_pid = -1;
+                            if (proc)
+                            {
+                                restart_proc = 0; 
+                                if (proc->keepalive_opts)
+                                {
+                                    int i = 0;
+                                    while(proc->keepalive_opts[i])
+                                    {
+                                        if (SUCCESSFUL_EXIT == proc->keepalive_opts[i])
+                                        {
+                                            if (0 <  proc->keepalive_opts[i + 1])
+                                            {
+                                                if (WIFEXITED(status))
+                                                {
+                                                    restart_proc |= 1;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                if (WIFSIGNALED(status))
+                                                {
+                                                    restart_proc |= 1;
+                                                }  
+                                            } 
+                                        }
+                                        i += 2; 
+                                    } 
+                                }
+            
+                                if (restart_proc)
+                                {
+                                    struct timeval now;
+                                    gettimeofday(&now, 0);
+                                    if ((proc->last_restart.tv_sec + 10) < now.tv_sec)
+                                    {
+                                        gettimeofday(&proc->last_restart, 0);
+                                        spawn_proc(proc);
+                                    }
+                                    else
+                                    {
+                                        if (proc->throttle_count < 40)
+                                        {   
+                                            gettimeofday(&proc->last_restart, 0);
+                                            proc->last_restart.tv_sec += 10;
+                                            proc->throttle_count++;
+                                            queue_proc(proc);
+                                        } 
+                                        else
+                                        {
+                                            fprintf(stderr, "%s exceeded throttle limit\n", proc->label);
+                                        } 
+                                    } 
+                                }
+                                else
+                                {
+                                    if (WIFEXITED(status))
+                                        fprintf(stderr, "process %s exited with %d\n", proc->label, WEXITSTATUS(status));
+                                    else if (WIFSIGNALED(status)) 
+                                        fprintf(stderr, "process %s signaled with %d\n", proc->label, WTERMSIG(status));
+                                }
+                            }
+                        }
+                    }
                 }
-                else
-                {
-                    if (WIFEXITED(status))
-                        fprintf(stderr, "process %s exited with %d\n", proc->label, WEXITSTATUS(status));
-                    else if (WIFSIGNALED(status)) 
-                        fprintf(stderr, "process %s signaled with %d\n", proc->label, WTERMSIG(status));
-                }
-            }
+            }  
         }
     }
 
