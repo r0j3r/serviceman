@@ -90,10 +90,10 @@ launch_control_proc(struct sockaddr_un * u, socklen_t * l, pid_t * p)
     {
         close(endp); 
         char * argv[2];
-        argv[0] = "test_servctl";
+        argv[0] = "servctl";
         argv[1] = 0;
 
-        if (-1 == execv("./test_servctl", argv))
+        if (-1 == execv("/lib/process-manager/servctl", argv))
             fprintf(stderr, "execv failed: %s\n", strerror(errno));
         _exit(4);
     }
