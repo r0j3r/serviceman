@@ -9,6 +9,7 @@ struct child_process
     unsigned char * keepalive_opts;
     unsigned int throttle_count;
     struct timeval last_restart;
+    unsigned char * data_buf;
 };
 
 struct child_process * make_child_proc(struct svc_packet *);

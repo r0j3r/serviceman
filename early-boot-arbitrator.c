@@ -1,6 +1,7 @@
 #include <sys/mount.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <signal.h> 
 #include <unistd.h>
 #include <string.h>
@@ -9,6 +10,7 @@
 #include <stdio.h>
 #include "unknown_proto.h"
 #include "message.h"
+#include "definition_packet.h"
 #include "notification.h"
 #include "ping_pong.h"
 
@@ -29,6 +31,8 @@ struct waiter
     struct waiter * next;
     struct request * r;
 };
+
+char * progname = "early-boot-arbitrator";
 
 struct item * resources = 0;
 
@@ -54,11 +58,13 @@ struct reply_buf * process_notification_payload(unsigned char *, unsigned int);
 static const unsigned int data_buf_size = 4096;
 
 int sig_num = 0;
+unsigned char timeout = 0;
 
 void
 signal_handler(int num)
 {
     sig_num = num;
+    if (num == SIGALRM) timeout = 0;
 }
 
 int
@@ -75,6 +81,7 @@ main(void)
     sigfillset(&sig.sa_mask);
     sig.sa_handler = signal_handler;
     sigaction(SIGTERM, &sig, 0);
+    sigaction(SIGALRM, &sig, 0);
 
     resources = malloc(sizeof(*resources));
     memset(resources, 0, sizeof(*resources));
@@ -84,6 +91,9 @@ main(void)
     endp = create_endpoint("/run/early-boot-arbit");
     if (endp < 0)
     {
+        fprintf(stderr, "invalid endp %d\n", endp); 
+        return -1; 
+    }
         data = malloc(data_buf_size);
         m = (struct message *)data;
         fprintf(stderr, "early-boot-arbitrator ready...\n");  
@@ -92,7 +102,7 @@ main(void)
             ret = recvfrom(endp, data + bytes_read, data_buf_size - bytes_read, 0, 0, 0);
             if (ret > 0)
             {
-                printf("received %d bytes\n", ret);
+                fprintf(stderr, "received %d bytes\n", ret);
                 bytes_read += ret;
                 while (bytes_read >= sizeof(*m))
                 {
@@ -147,13 +157,18 @@ main(void)
                         }
                     }
                     else 
-                        fprintf(stderr, "recvfrom failed: %s\n", strerror(errno));
+                    {
+                        fprintf(stderr, "early-boot-arbitrator: recvfrom failed: %s\n", strerror(errno));
+                        sleep(3); 
+                   }
                 }
             }
         }
         unlink("/run/early-boot-arbit");
-        close(endp);
-    } 
+        close(endp); 
+        fprintf(stderr, "early-boot-arbitrator exiting\n");
+        return 0;
+ 
 }
 
 struct reply_buf *

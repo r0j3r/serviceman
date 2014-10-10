@@ -23,6 +23,7 @@ static const unsigned char POWEROFF_MAGIC[]
 static const unsigned char REBOOT_MAGIC[]
     = {0x86, 0x3d, 0xbe, 0xee, 0x11, 0x97, 0x4c, 0x44, 0x87, 0x67,
 0x25, 0x87, 0x24, 0x0f, 0xe4, 0xc4}; 
+
  
 static const unsigned int OP_CREATE = 1;
 static const unsigned int OP_READ = 2;
@@ -61,3 +62,6 @@ struct netbuff
     unsigned short len;
     unsigned char data[];
 };
+
+enum err_code get_reply(int sd, struct sockaddr_un *, socklen_t *);
+struct request * get_servctl_request(unsigned char *, unsigned int);

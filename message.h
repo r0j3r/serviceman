@@ -5,6 +5,8 @@ struct message
     unsigned char payload[]; 
 };
 
+static const int MP_ID_LEN = 16;
+
 static unsigned char MESSAGE_PROTO_ID[16] =  
 {0x53, 0x50, 0x6f, 0x11, 0x6b, 0xd2, 0x4f, 0x47, 0xa9, 0x7f, 0xcd, 0x53, 0x9f, 0x12, 0xa8, 0xf9};
 static unsigned char PING_PROTO_ID[16] = 
@@ -13,3 +15,6 @@ static unsigned char PONG_PROTO_ID[16] =
 {0xba, 0xf8, 0x85, 0x54, 0x52, 0x83, 0x41, 0x25, 0xac, 0xf0, 0x42, 0xa2, 0xf5, 0x52, 0x25, 0xe7};
 
 int send_message(int, unsigned char *, unsigned int, unsigned char *, unsigned int);
+struct message * create_message(unsigned char *, unsigned int);
+int send_message_un(int, struct message *, struct sockaddr_un *, socklen_t);
+struct message * get_message(unsigned char *, unsigned int);

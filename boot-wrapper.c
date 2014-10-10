@@ -4,12 +4,15 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/un.h>
 #include "message.h"
 #include "notification.h"
 
-struct request * create_request(int, unsigned char[16], unsigned char[16]);
+
 char * create_endp_name(void);
 char * create_endp_path(char *);
+
+unsigned char timeout = 0;
 
 int
 main(int argc, char * argv[])

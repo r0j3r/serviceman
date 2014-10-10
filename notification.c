@@ -6,14 +6,17 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include "definition_packet.h"
 #include "notification.h"
 #include "message.h"
+#include "servctl.h"
  
 struct request * create_request_buf(unsigned int);
 extern unsigned char timeout;
+extern unsigned char * progname;
 
 int
-create_endpoint(unsigned char * name)
+create_endpoint(char * name)
 {
     int fd;
     struct sockaddr_un endp;
@@ -34,12 +37,13 @@ create_endpoint(unsigned char * name)
                 }
             }
         }
-        fprintf(stderr, "socket fd is %d\n", fd);   
+        fprintf(stderr, "%s, socket fd is %d\n", progname, fd);   
         memset(&endp, 0, sizeof(endp));
         endp.sun_family = AF_UNIX;
         strcpy(endp.sun_path, name);    
         if (-1 == bind(fd, (struct sockaddr *)&endp, sizeof(struct sockaddr_un)))
         {
+            fprintf(stderr, "%s, bind failed %s\n", progname, strerror(errno)); 
             if (EADDRINUSE == errno)
             {
                 unsigned char p[16];
@@ -56,10 +60,13 @@ create_endpoint(unsigned char * name)
                         unlink(name);
                         close(fd);
                         try_bind--;
-                        fprintf(stderr, "retrying bind %s\n", name);
+                        fprintf(stderr, "%s, taking over socket. retrying bind %s\n", progname, name);
                     }
-                    else 
-                    {  
+                    else
+                    {
+                        try_bind = 0;
+                        close(fd);
+                        fd = -2;
                     }
                 }  
                 else
@@ -76,21 +83,26 @@ create_endpoint(unsigned char * name)
                     try_bind = 0;
                     close(fd);
                     fd = -3;
-                    fprintf(stderr, "failed to bind %s: someone else is using the socket\n", name);
+                    alarm(0);
+                    fprintf(stderr, "%s, failed to bind %s: someone else is using the socket\n", progname, name);
                 }
             
             }
             else
             {
-                fprintf(stderr, "bind %s failed: %s\n", name, strerror(errno));
-                close(fd);
-                try_bind--;
-                fd = -4;
-                sleep(1); 
+                fprintf(stderr, "%s, bind %s failed: %s\n", progname, name, strerror(errno));
+                if (EINTR != errno)
+                {
+                    close(fd);
+                    try_bind--;
+                    fd = -errno;
+                    sleep(1);
+                } 
             }
         }
         else
         {
+            fprintf(stderr, "%s bind successful\n", progname);
             try_bind = 0; 
         }         
     } 
@@ -119,6 +131,26 @@ create_request_buf(unsigned int len)
     return r;
 }
 
+struct request *
+create_servctl_request_buf(unsigned int len)
+{
+    struct request * r = malloc(sizeof(struct request) + len);
+    memset(r, 0, sizeof(struct request) + len);
+    memcpy(r->protocol_id, SERVCTL_PROTO_ID, MP_ID_LEN);
+    r->data_len = len;
+    return r;
+}
+
+struct request *
+create_servctl_request(unsigned int op, unsigned char * resource_id, struct svc_packet * p)
+{
+    struct request * r = create_servctl_request_buf(p->packet_size);
+    r->op = op;
+    memcpy(r->resource_id, resource_id, MP_ID_LEN);
+    memcpy(r->data, p, p->packet_size);
+    return r;
+}
+
 int
 send_notify(int fd, unsigned char resource_id[16], unsigned char endp_name[16])
 {
@@ -129,7 +161,7 @@ send_notify(int fd, unsigned char resource_id[16], unsigned char endp_name[16])
     memcpy(r->sender_endp, endp_name, MP_ID_LEN);
     memcpy(r->data, &status_code, 4);
     r->data_len = 4;
-    int ret = send_message(fd, (unsigned char *)"early-boot-arbit", 16, (unsigned char *)r, sizeof(*r));
+    send_message(fd, (unsigned char *)"early-boot-arbit", 16, (unsigned char *)r, sizeof(*r));
     unsigned char data[4096];
     if (-1 == read(fd, data, 4096))
     {

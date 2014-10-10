@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <stdio.h>
+#include "definition_packet.h"
 #include "notification.h"
 #include "servctl.h"
 
@@ -49,7 +50,8 @@ launch_control_proc(struct sockaddr_un * u, socklen_t * l, pid_t * p)
             }
             else
             {
-                fprintf(stderr, "recvfrom failed: %s\n", strerror(errno));
+                fprintf(stderr, "launch_control_proc: recvfrom failed: %s\n", strerror(errno));
+                sleep(3); 
             }
         } 
         else 
