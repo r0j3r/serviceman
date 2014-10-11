@@ -3,9 +3,12 @@
 #include <sys/un.h>
 #include <stdio.h>
 #include <errno.h>
+#include <unistd.h>
 #include "error.h"
 #include "protocol.h"
 #include "message.h"
+#include "definition_packet.h"
+
 #include "notification.h"
 #include "servctl.h"
 

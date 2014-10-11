@@ -11,6 +11,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/swap.h>
+#include "definition_packet.h"
 #include "notification.h"
 
 int write_to_control_file(char *, char *);
@@ -21,6 +22,14 @@ void notify_root_ready(int, unsigned char[16]);
 void notify_tmp_ready(int, unsigned char[16]);
 
 int got_sigterm = 0;
+int timeout = 0;
+unsigned char * progname = "volume-manager";
+
+void
+handle_sigalrm(int num, siginfo_t * info, void * d)
+{
+    timeout = 1;
+}
 
 void
 handle_sigterm(int num, siginfo_t * info, void * d)
@@ -41,6 +50,12 @@ main(void)
     sig.sa_flags = SA_SIGINFO;
     sig.sa_sigaction = handle_sigterm;
     sigaction(SIGTERM, &sig, 0);
+
+    memset(&sig, 0, sizeof(sig));
+    sigfillset(&sig.sa_mask);
+    sig.sa_flags = SA_SIGINFO;
+    sig.sa_sigaction = handle_sigalrm;
+    sigaction(SIGALRM, &sig, 0);
 
     (void)fprintf(stderr, "volume-manager starting...\n");
 

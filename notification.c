@@ -64,6 +64,7 @@ create_endpoint(char * name)
                     }
                     else
                     {
+                        fprintf(stderr, "%s, bind %s failed: %s\n", progname, name, strerror(errno));
                         try_bind = 0;
                         close(fd);
                         fd = -2;

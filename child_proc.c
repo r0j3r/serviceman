@@ -37,7 +37,15 @@ make_child_proc(struct svc_packet * p)
     }
      
     if (p->keepalive_opts_offset)
-        proc->keepalive_opts = d + p->keepalive_opts_offset;
+    {
+        proc->keepalive_opts = proc->data_buf + p->keepalive_opts_offset;
+        fprintf(stderr, "make_child_proc: keepalive opts ");
+        for(int i = 0; proc->keepalive_opts[i]; i += 2)
+        {
+            fprintf(stderr, "%d:%d ", proc->keepalive_opts[i], proc->keepalive_opts[i + 1]);
+        }
+        fprintf(stderr, "\n");
+    }
     proc->login_session = p->login_session;
     return proc;
 }

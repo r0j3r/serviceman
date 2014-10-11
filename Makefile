@@ -20,4 +20,6 @@ pid1.o: pid1.c
 test_notify: test_notify.o notification.o message.o
 test_notifications: test_notifications.o notification.o message.o 
 boot-wrapper: boot-wrapper.o notification.o message.o 
-test_servctl: protocol.o test_servctl.o message.o notification.o
+test_servctl: parse_def.o protocol.o test_servctl.o message.o notification.o
+test_parse_def: test_parse_def.o parse_def.o 
+test_load_daemons: test_load_daemons.o parse_def.o

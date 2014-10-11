@@ -28,34 +28,8 @@ char * progname = "process-manager";
 struct child_process * running;
 struct child_process * waiting;
 
-char * bootlogd_argv[] = {"bootlogd", "-d", 0};
-struct child_process bootlogd = {0, 0, "/sbin/bootlogd", bootlogd_argv, 0, "bootlogd", 0, 0, {0, 0}};
-
 char * arbitrator_argv[] = {"early-boot-arbitrator", 0};
-struct child_process arbitrator = {0, 0, "/sbin/early-boot-arbitrator", arbitrator_argv, 0, "arbitrator", 0, 0, {0, 0}};
-
-char * volume_manager_argv[] = {"volume-manager", 0};
-struct child_process volume_manager = {0, 0, "/sbin/volume-manager", volume_manager_argv, 0, "volume-manager", 0, 0, {0, 0}}; 
-
-char * udevd_argv[] = {"udevd", 0};
-struct child_process udevd = {0, 0, "/sbin/udevd", udevd_argv, 0, "udev", 0, 0, {0, 0}};
-
-char * udev_cold_boot_argv[] = {"udev_cold_boot", 0};
-struct child_process udev_cold_boot = {0, 0, "/sbin/udev_cold_boot", udev_cold_boot_argv, 0, "udev_cold_boot", 0, 0, {0, 0}};
-
-unsigned char getty1_keepalive_opts[3] = {1, 1, 0};
-char * agetty1_argv[] = {"boot-wrapper", "/sbin/agetty", "agetty", "tty3", "9600", "linux", 0};
-struct child_process agetty1 = {0, 0, "/sbin/boot-wrapper", agetty1_argv, 1, "agetty1", getty1_keepalive_opts, 0, {0, 0}};
- 
-unsigned char getty2_keepalive_opts[5] = {1, 1, 1, 0, 0}; //keepalive even if it crashed
-char * agetty2_argv[] = {"boot-wrapper", "/sbin/agetty", "agetty", "tty2", "9600", "linux", 0};
-struct child_process agetty2 = {0, 0, "/sbin/boot-wrapper", agetty2_argv, 1, "agetty2", getty2_keepalive_opts, 0, {0, 0}};
-
-char * syslogd_argv[] = {"boot-wrapper", "/sbin/syslogd", "syslogd", "-n", 0};
-struct child_process syslogd = {0, 0, "/sbin/boot-wrapper", syslogd_argv, 0, "syslogd", 0, 0, {0, 0}};
-
-char * klogd_argv[] = {"boot-wrapper", "/sbin/klogd", "klogd", "-n", 0};
-struct child_process klogd = {0, 0, "/sbin/boot-wrapper", klogd_argv, 0, "klogd", 0, 0, {0, 0}};
+struct child_process arbitrator = {0, 0, "/sbin/early-boot-arbitrator", arbitrator_argv, 0, "arbitrator", 0, 0, {0, 0}, 0};
 
 int setctty(char *);
 unsigned char any_child_exists(void);
@@ -172,13 +146,7 @@ main(void)
     int ctl_p_endp = launch_control_proc(&ctl_un, &ctl_len, &ctl_pid);
 
     spawn_proc(&arbitrator);
-    /*spawn_proc(&volume_manager);
-    spawn_proc(&udevd);
-    spawn_proc(&udev_cold_boot);
-    spawn_proc(&agetty1);
-    spawn_proc(&agetty2);
-    spawn_proc(&bootlogd);
-*/
+
     while(0 == run_state)
     {
         int status;
@@ -243,6 +211,8 @@ main(void)
                                     int i = 0;
                                     while(proc->keepalive_opts[i])
                                     {
+                                        fprintf(stderr, "keepalive opts %d:%d\n", proc->keepalive_opts[i], 
+                                            proc->keepalive_opts[i + 1]);
                                         if (SUCCESSFUL_EXIT == proc->keepalive_opts[i])
                                         {
                                             if (0 <  proc->keepalive_opts[i + 1])
@@ -298,9 +268,9 @@ main(void)
                                 else
                                 {
                                     if (WIFEXITED(status))
-                                        fprintf(stderr, "process %s exited with %d\n", proc->label, WEXITSTATUS(status));
+                                        fprintf(stderr, "process %s:%d exited with %d\n", proc->label, proc->pid, WEXITSTATUS(status));
                                     else if (WIFSIGNALED(status)) 
-                                        fprintf(stderr, "process %s signaled with %d\n", proc->label, WTERMSIG(status));
+                                        fprintf(stderr, "process %s:%d signaled with %d\n", proc->label, proc->pid, WTERMSIG(status));
                                 }
                             }
                         }
@@ -504,6 +474,7 @@ spawn_proc(struct child_process * c)
     }
     else
     {
+        fprintf(stderr, "child %s: pid %d\n", c->exec_file_path, c->pid);
         c->next = running->next;
         running->next = c;
     }

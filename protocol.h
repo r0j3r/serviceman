@@ -45,18 +45,6 @@ struct reply
     enum err_code err_code;
 };
 
-struct packet
-{
-    int packet_size;
-    int stringtab_offset; //offset from start of packet
-    int label; //offset in stringtab
-    int program; //offset in stringtab  
-    int program_args; //from start of packet; array of offsets into stringtab
-    int program_args_count;
-    unsigned char login_session; 
-    int keepalive; //offset from start of packet
-};
-
 struct netbuff
 {
     unsigned short len;

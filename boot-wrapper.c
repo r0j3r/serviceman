@@ -6,11 +6,13 @@
 #include <string.h>
 #include <sys/un.h>
 #include "message.h"
+#include "definition_packet.h"
 #include "notification.h"
 
 
 char * create_endp_name(void);
 char * create_endp_path(char *);
+unsigned char * progname = "boot-wrapper";
 
 unsigned char timeout = 0;
 
@@ -18,6 +20,8 @@ int
 main(int argc, char * argv[])
 {
     pid_t our_pid = getpid();
+    char logname[1024];
+
     fprintf(stderr, "boot-wrapper %d starting...\n", our_pid);
     char * endp_name = create_endp_name();
     char * endp_path = create_endp_path(endp_name);
@@ -61,6 +65,7 @@ main(int argc, char * argv[])
     }
     if (endp < 0)
     { 
+        fprintf(stderr, "endp is %d\n", endp); 
         if (endp == -1)
             exit(3);
         else if (endp == -2)
