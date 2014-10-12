@@ -295,7 +295,7 @@ main(void)
 
     fprintf(stderr, "sending SIGTERM to all processes...\n");
     struct child_process * v = running->next;
-    while(v)
+    while(running != v)
     {
         if (-1 == kill(v->pid, SIGTERM))
         {

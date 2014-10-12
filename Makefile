@@ -3,6 +3,7 @@ CC=gcc
 CFLAGS=-fPIE -O2 -g -Wall -std=gnu99 -pedantic -march=native
 LDFLAGS=-fPIE -O2 -g -Wall -std=gnu99 -pedantic -march=native
 
+all: process-manager serviceman-shutdown early-boot-arbitrator pid1 volume-manager test_servctl
 serv: serv.o protocol.o
 protocol.o: protocol.h protocol.c
 serv.o: serv.c protocol.h error.h
@@ -24,3 +25,4 @@ test_servctl: parse_def.o protocol.o test_servctl.o message.o notification.o
 test_parse_def: test_parse_def.o parse_def.o 
 test_load_daemons: test_load_daemons.o parse_def.o
 serviceman-shutdown: serviceman-shutdown.o
+.PHONY: all

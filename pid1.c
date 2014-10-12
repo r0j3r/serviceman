@@ -113,7 +113,7 @@ main()
                 argv[1] = "-r";
                 argv[2] = 0;
             }
-            execv("/sbin/serviceman-shutdown", argv); 
+            execv("/lib/process-manager/serviceman-shutdown", argv); 
         }
         else
         {
