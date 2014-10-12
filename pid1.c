@@ -81,19 +81,44 @@ main()
                 fprintf(stderr, "waitpid exited with: %s\n", strerror(errno));
                 if (ECHILD == errno)
                 {
-                    pause();
+                    break;
                 } 
+                else if (EINTR)
+                {
+                    if (sys_shutdown)
+                    {
+                        fprintf(stderr, "received SIGUSR1, shutting down...\n");
+                        kill(proc_manager, SIGUSR1);
+                    }
+                    else if (sys_reboot)
+                    {    
+                        fprintf(stderr, "received SIGINT, rebooting...\n");
+                        kill(proc_manager, SIGTERM);
+                    }
+                    break;
+                }
             }
+        }         
+        waitpid(proc_manager, &status, 0);
+        if (0 == fork())
+        {
+            char * argv[3];
+            argv[0] = "shutdown";
             if (sys_shutdown)
             {
-                fprintf(stderr, "received SIGUSR1, shutting down...\n");
-                kill(proc_manager, SIGUSR1);
+                argv[1] = 0;
             }
             else if (sys_reboot)
-            { 
-                fprintf(stderr, "received SIGINT, rebooting...\n");
-                kill(proc_manager, SIGTERM);
+            {     
+                argv[1] = "-r";
+                argv[2] = 0;
             }
+            execv("/sbin/serviceman-shutdown", argv); 
+        }
+        else
+        {
+            while(1)
+                pause(); 
         }
     }
    
