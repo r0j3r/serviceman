@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <pwd.h>
 #include "definition_packet.h"
 #include "notification.h"
 #include "servctl.h"
@@ -18,12 +19,12 @@
 int run = 1;
 int signum = 0;
 
-
 unsigned char timeout = 0;
 char * progname = "test_servctl";
 
 int send_servctl_packet(int, struct svc_packet *, struct sockaddr_un *, socklen_t);
 int load_daemons(int, struct sockaddr_un *, socklen_t);
+int load_agents(int, struct sockaddr_un *, socklen_t);
 
 void
 sighandler(int num)
@@ -42,9 +43,35 @@ alarm_handler(int num)
     timeout = 1;
 }
 
+char process_manager_run_dir[1024];
+char process_manager_socket_path[124];
+char servctl_socket_path[1024];
+
+int we_are_root = 0;
+
 int
-main(void)
+main(int argc, char * argv[])
 {
+    struct passwd * pwd = 0;
+    if (argc == 2)
+    {
+        if (argv[1])
+        {
+            errno = 0;
+            pwd = getpwnam(argv[1]);
+            if (pwd)
+            {
+                fprintf(stderr, "servctl: dropping privs\n");
+                setuid(pwd->pw_uid);
+                setgid(pwd->pw_gid);  
+            }
+            else
+            {
+                fprintf(stderr, "failed to getpwnam: %s\n", strerror(errno));
+            } 
+        }
+    }
+
     struct sigaction sig;
     memset(&sig, 0, sizeof(sig));
     sigfillset(&sig.sa_mask);
@@ -56,13 +83,27 @@ main(void)
     sig.sa_handler = alarm_handler;
     sigaction(SIGALRM, &sig, 0);
 
-    int sd = create_endpoint((unsigned char *)"/run/process-manager/test_servctl");
+    if (pwd)
+    {
+        sprintf(process_manager_run_dir, "/run/process-manager.%s", pwd->pw_name);
+        sprintf(process_manager_socket_path, "/run/process-manager.%s/procman", pwd->pw_name);
+        sprintf(servctl_socket_path, "/run/process-manager.%s/test_servctl", pwd->pw_name);
+    }
+    else 
+    {
+        sprintf(process_manager_run_dir, "/run/process-manager");
+        sprintf(process_manager_socket_path, "/run/process-manager/procman");
+        sprintf(servctl_socket_path, "/run/process-manager/test_servctl");
+        we_are_root = 1;
+    }
+
+    int sd = create_endpoint(servctl_socket_path);
     struct sockaddr_un procman_sock;
     socklen_t procman_socklen = sizeof(procman_sock);
 
     memset(&procman_sock, 0, sizeof(procman_sock));
     procman_sock.sun_family = AF_UNIX;
-    strcpy(procman_sock.sun_path, "/run/process-manager/procman");
+    strcpy(procman_sock.sun_path, process_manager_socket_path);
 
     fprintf(stderr, "test_servctl starting\n");
    
@@ -81,7 +122,10 @@ main(void)
     else
         fprintf(stderr, "test_servctl: sent ack ack\n");
 
-    load_daemons(sd, &procman_sock, procman_socklen);
+    if (we_are_root)
+        load_daemons(sd, &procman_sock, procman_socklen);
+    else
+        load_agents(sd, &procman_sock, procman_socklen);
 
     //send_message_un(sd, m, &procman_sock, procman_socklen); 
     //get_reply(sd, &procman_sock, procman_socklen);
@@ -89,7 +133,7 @@ main(void)
     while(run)
         pause();
 
-    unlink("/run/process-manager/test_servctl");
+    unlink(servctl_socket_path);
  
     return 0;
 }
@@ -99,7 +143,8 @@ send_servctl_packet(int sd, struct svc_packet * p, struct sockaddr_un * u, sockl
 {
     struct request * req = create_servctl_request(CREATE, PROC_LIST_RESOURCE, p);
 
-    struct message * m = create_message(req, sizeof(*req) + req->data_len);
+
+    struct message * m = create_message((unsigned char *)req, sizeof(*req) + req->data_len);
     free(req);
  
     if (-1 == sendto(sd, m, sizeof(*m) + m->payload_len, 0, (struct sockaddr *)u, l)) //process-manager
@@ -133,6 +178,44 @@ load_daemons(int sd, struct sockaddr_un * u, socklen_t l)
 
         printf("%s\n", service->d_name);
         strcpy(path, "/etc/daemons/");
+        strcat(path, service->d_name);
+        if (stat(path, &st_buf) == 0)
+        {
+            if (S_ISREG(st_buf.st_mode))
+            { 
+                p = parse_def_file(path);
+                printf("sending packet\n");
+                send_servctl_packet(sd, p, u, l);
+            }
+        }
+    }
+    closedir(services_dir);
+    return 0;
+}
+
+int 
+load_agents(int sd, struct sockaddr_un * u, socklen_t l)
+{
+    DIR * services_dir;
+    struct svc_packet * p;
+    struct dirent * service;
+
+    services_dir = opendir("/etc/agents");
+    if (services_dir == 0)
+        return -1;
+
+    while((service = readdir(services_dir)))
+    {
+        if (service->d_name[0] == '.')
+            continue;
+        if (strchr(service->d_name, '~'))
+            continue;
+
+        char path[FILENAME_MAX];
+        struct stat st_buf;
+
+        printf("%s\n", service->d_name);
+        strcpy(path, "/etc/agents/");
         strcat(path, service->d_name);
         if (stat(path, &st_buf) == 0)
         {

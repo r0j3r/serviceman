@@ -14,6 +14,7 @@
 #include <sys/time.h>
 #include <signal.h>
 #include <mntent.h>
+#include <pwd.h>
 #include "error.h"
 #include "protocol.h"
 #include "servctl.h"
@@ -27,6 +28,7 @@ char * progname = "process-manager";
 
 struct child_process * running;
 struct child_process * waiting;
+struct child_process * inactive;
 
 char * arbitrator_argv[] = {"early-boot-arbitrator", 0};
 struct child_process arbitrator = {0, 0, "/sbin/early-boot-arbitrator", arbitrator_argv, 0, "arbitrator", 0, 0, {0, 0}, 0};
@@ -43,17 +45,10 @@ struct child_process * dequeue_proc(void);
 int handle_data(unsigned char *, unsigned int);
 int handle_start_proc(struct request *);
 
-int run_state = 0;
 unsigned char got_sigchild = 0;
 unsigned char timeout = 0;
 int signum;
-
-void
-handle_sigusr1(int num, siginfo_t * info, void * b)
-{
-    signum = num; 
-    run_state = RB_POWER_OFF;
-}
+int run_state = 0;
 
 void
 handle_sigterm(int num, siginfo_t * info, void * b)
@@ -76,19 +71,47 @@ handle_sigalarm(int num, siginfo_t * info, void * b)
     signum = num; 
 }
 
+int we_are_root = 0;
+char process_manager_run_dir[1024];
+char process_manager_socket_path[1024];
+
 int
-main(void)
+main(int argc, char * argv[])
 {
     int fd;
     struct sigaction sig;
-
+    struct passwd * pwd = 0;
+    
+    if (argc == 2)
+    {
+        if (argv[1])
+        {
+            errno = 0; 
+            pwd = getpwnam(argv[1]);
+            if (0 == pwd)
+            {
+                fprintf(stderr, "getpwnam failed: %s\n", strerror(errno));
+                while(1)
+                {
+                    pause();
+                }
+            }  
+        } 
+    }
+    
+    if (pwd)
+    {
+        sprintf(process_manager_run_dir, "/run/process-manager.%s", pwd->pw_name);
+        sprintf(process_manager_socket_path, "/run/process-manager.%s/procman", pwd->pw_name);
+    }
+    else 
+    {
+        sprintf(process_manager_run_dir, "/run/process-manager");
+        sprintf(process_manager_socket_path, "/run/process-manager/procman");
+        we_are_root = 1;
+    }
+    
     (void)fprintf(stderr, "process-manager: process-manager starting...\n");
-
-    memset(&sig, 0, sizeof(sig));
-    sigfillset(&sig.sa_mask);
-    sig.sa_flags = SA_SIGINFO;
-    sig.sa_sigaction = handle_sigusr1;
-    sigaction(SIGUSR1, &sig, 0);
 
     memset(&sig, 0, sizeof(sig));
     sigfillset(&sig.sa_mask);
@@ -123,12 +146,34 @@ main(void)
         (void)fprintf(stderr, "failed to open console");
     }     
 
-    if (-1 == mount("none", "/run", "tmpfs", 0, 0))
+    if (we_are_root)
     {
-        fprintf(stderr, "failed to mount tmpfs on /run: %s\n", strerror(errno));
-        while(1)
-            pause();
+        struct stat stat_buf;
+        memset(&stat_buf, 0, sizeof(stat_buf));
+        
+        if (-1 == stat("/run/process-manager", &stat_buf))
+        {
+            fprintf(stderr, "expected stat error: %s\n", strerror(errno));
+            if (-1 == mount("none", "/run", "tmpfs", 0, 0))
+            {
+                fprintf(stderr, "failed to mount tmpfs on /run: %s\n", strerror(errno));
+                while(1)
+                    pause();
+            }
+            fprintf(stderr, "we are root\n");
+            if (-1 == mkdir("/run/process-manager", 0700))
+            {
+                fprintf(stderr, "failed to make dir /run/process-manager: %s\n", strerror(errno));
+                while(1)
+                    pause();
+            }
+        }
     }
+    else
+    {
+        mkdir(process_manager_run_dir, 0700);
+        chown(process_manager_run_dir, pwd->pw_uid, pwd->pw_gid);
+    } 
 
     running = malloc(sizeof(*running));
     memset(running, 0, sizeof(*running));
@@ -140,12 +185,23 @@ main(void)
     waiting->pid = 0x7fffffff;
     waiting->last_restart.tv_sec = 0x7fffffffffffffff; 
 
+    inactive = malloc(sizeof(*inactive));
+    memset(inactive,0 ,sizeof(*inactive));
+    inactive->next = inactive;
+
     struct sockaddr_un ctl_un;
     pid_t ctl_pid;
     socklen_t ctl_len; 
-    int ctl_p_endp = launch_control_proc(&ctl_un, &ctl_len, &ctl_pid);
+    int ctl_p_endp = launch_control_proc(pwd, process_manager_socket_path, &ctl_un, &ctl_len, &ctl_pid);
 
-    spawn_proc(&arbitrator);
+    if (ctl_p_endp < 0) //socket already exists and another instance is running
+    {
+        fprintf(stderr, "socket in use, ctl_p_endp: %d\n", ctl_p_endp);
+        return 1;
+    }
+  
+    if (we_are_root)
+        spawn_proc(&arbitrator);
 
     while(0 == run_state)
     {
@@ -174,7 +230,7 @@ main(void)
         {
             if (errno == EINTR)
             {
-                fprintf(stderr, "process-manager: signal received: run_state == %d\n", run_state);
+                fprintf(stderr, "process-manager: signal received: %d, run_state == %d\n", signum, run_state);
                 if (timeout)
                 {
                     timeout = 0;
@@ -196,7 +252,7 @@ main(void)
                     {
                         if (child_pid < 0)
                         {
-                            fprintf(stderr, "faild to get child status: %s\n", strerror(errno));
+                            fprintf(stderr, "failed to get child status: %s\n", strerror(errno));
                             if (EINTR != errno) break;  
                         }
                         else
@@ -289,11 +345,10 @@ main(void)
         }
     }
 
-    fprintf(stderr, "process-manager shutting down system...\n");
     unsigned char any_child_exists = 1;
     int status = 0;
 
-    fprintf(stderr, "sending SIGTERM to all processes...\n");
+    fprintf(stderr, "sending SIGTERM to all children...\n");
     struct child_process * v = running->next;
     while(running != v)
     {
@@ -303,6 +358,7 @@ main(void)
         }
         v = v->next;
     }
+    kill(ctl_pid, SIGTERM);
 
     alarm(10);
 
@@ -314,7 +370,7 @@ main(void)
             if (ECHILD == errno) 
             {
                 any_child_exists = 0;
-                fprintf(stderr, "process-manager: no more processes left...\n");
+                fprintf(stderr, "process-manager: no more children left...\n");
             }
             else if (EINTR == errno)
             {
@@ -331,7 +387,7 @@ main(void)
     sleep(1);
  
     close(ctl_p_endp);
-    unlink("/run/process-manager/procman");
+    unlink(process_manager_socket_path);
     return 0;
 }
 
@@ -439,7 +495,7 @@ handle_data(unsigned char * d, unsigned int l)
             {
                 if (CREATE == req->op)
                 {
-                    return handle_start_proc(req); 
+                    return handle_start_proc((struct request *)req); 
                 }
                 else
                 {
@@ -467,7 +523,7 @@ int
 handle_start_proc(struct request * r)
 {
     fprintf(stderr, "starting proc\n");
-    struct child_process * c = make_child_proc(r->data);
+    struct child_process * c = make_child_proc((struct svc_packet *)r->data);
     if (0 == c)
     {
         fprintf(stderr, "failed to created child process structure\n");

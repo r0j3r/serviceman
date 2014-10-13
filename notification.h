@@ -32,8 +32,8 @@ static const unsigned char ROOT_STATUS[16] =
 static const unsigned char TMP_STATUS[16] =
  {0xa3, 0x09, 0xf8, 0x2e, 0x3b, 0x20, 0x45, 0x00, 0xb5, 0x0f, 0x7e, 0x3f, 0x54, 0x26, 0x76, 0x14};
 
-int send_notify(int, unsigned char[16], unsigned char[16]);
+int send_notify(int, const unsigned char[16], unsigned char[16]);
 int create_endpoint(char *);
-struct request * create_request(unsigned int, unsigned char *, unsigned char *);
+struct request * create_request(unsigned int, const unsigned char *, unsigned char *);
 struct request * create_servctl_request_buf(unsigned int);
-struct request * create_servctl_request(unsigned int, unsigned char *, struct svc_packet *);
+struct request * create_servctl_request(unsigned int, const unsigned char *, struct svc_packet *);

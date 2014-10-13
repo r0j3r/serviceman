@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <stdio.h>
+#include <pwd.h>
 #include "definition_packet.h"
 #include "notification.h"
 #include "servctl.h"
@@ -14,15 +15,24 @@
 extern int signum;
 
 int
-launch_control_proc(struct sockaddr_un * u, socklen_t * l, pid_t * p)
+launch_control_proc(struct passwd * pwd, char * socket_path, struct sockaddr_un * u, socklen_t * l, pid_t * p)
 {
-    mkdir("/run/process-manager", 0700);
-    int endp = create_endpoint((unsigned char *)"/run/process-manager/procman");
- 
+    int endp = -1;
     pid_t child_pid = fork();
     *p = child_pid;
     if (child_pid)
     {
+        if (pwd)
+        {
+            fprintf(stderr, "dropping privs\n");
+            setuid(pwd->pw_uid);
+            setgid(pwd->pw_gid);
+        }
+
+        endp = create_endpoint(socket_path);
+
+        if (endp < 0)
+            return -1;
         struct sockaddr_un ctl_sock;
         memset(&ctl_sock, 0, sizeof(ctl_sock));
         socklen_t ctl_socklen = sizeof(ctl_sock);
@@ -90,10 +100,16 @@ launch_control_proc(struct sockaddr_un * u, socklen_t * l, pid_t * p)
     }
     else
     {
-        close(endp); 
-        char * argv[2];
+ 
+        char * argv[3];
         argv[0] = "servctl";
-        argv[1] = 0;
+        if (pwd)
+        { 
+            argv[1] = pwd->pw_name;
+            argv[2] = 0;
+        }
+        else
+            argv[1] = 0;
 
         if (-1 == execv("/lib/process-manager/servctl", argv))
             fprintf(stderr, "execv failed: %s\n", strerror(errno));

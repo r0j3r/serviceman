@@ -37,7 +37,7 @@ create_endpoint(char * name)
                 }
             }
         }
-        fprintf(stderr, "%s, socket fd is %d\n", progname, fd);   
+        fprintf(stderr, "%s:create_endpoint(), socket fd is %d\n", progname, fd);   
         memset(&endp, 0, sizeof(endp));
         endp.sun_family = AF_UNIX;
         strcpy(endp.sun_path, name);    
@@ -113,7 +113,7 @@ create_endpoint(char * name)
 }
 
 struct request *
-create_request(unsigned int op, unsigned char * resource_id, unsigned char * sender_endp)
+create_request(unsigned int op, const unsigned char * resource_id, unsigned char * sender_endp)
 {
     struct request * r = create_request_buf(0);
     r->op = op;
@@ -132,6 +132,7 @@ create_request_buf(unsigned int len)
     return r;
 }
 
+
 struct request *
 create_servctl_request_buf(unsigned int len)
 {
@@ -143,7 +144,7 @@ create_servctl_request_buf(unsigned int len)
 }
 
 struct request *
-create_servctl_request(unsigned int op, unsigned char * resource_id, struct svc_packet * p)
+create_servctl_request(unsigned int op, const unsigned char * resource_id, struct svc_packet * p)
 {
     struct request * r = create_servctl_request_buf(p->packet_size);
     r->op = op;
@@ -153,7 +154,7 @@ create_servctl_request(unsigned int op, unsigned char * resource_id, struct svc_
 }
 
 int
-send_notify(int fd, unsigned char resource_id[16], unsigned char endp_name[16])
+send_notify(int fd, const unsigned char resource_id[16], unsigned char endp_name[16])
 {
     int status_code = 0;
     struct request * r = create_request_buf(sizeof(status_code));

@@ -88,7 +88,7 @@ main()
                     if (sys_shutdown)
                     {
                         fprintf(stderr, "received SIGUSR1, shutting down...\n");
-                        kill(proc_manager, SIGUSR1);
+                        kill(proc_manager, SIGTERM);
                     }
                     else if (sys_reboot)
                     {    
@@ -113,10 +113,12 @@ main()
                 argv[1] = "-r";
                 argv[2] = 0;
             }
-            execv("/lib/process-manager/serviceman-shutdown", argv); 
+            execv("/lib/process-manager/serviceman-shutdown", argv);
+            _exit(4);  
         }
         else
         {
+            wait(&status); 
             while(1)
                 pause(); 
         }
@@ -126,8 +128,6 @@ main()
 
     setsid();
     setpgid( 0, 0);   
-
-    //mount /proc /sys /dev /dev/pts /dev/shm?
 
     execve("/sbin/process-manager", (char *[]) {"process-manager", 0}, (char *[]) { 0 });
     fprintf(stderr, "child failed to exec process-manager, exiting...\n"); 
