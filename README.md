@@ -1,12 +1,17 @@
 serviceman
 ==========
 
-new init implementation copied from apple's launchd design
-
-copies apple design of starting all daemons at once and let the daemons coordinate over ipc frameworks
-
-layered service architecture where each layer dont need another service in the same layer. therefore all services in a layer can be started at the same time
-
-pid 1 is a simple and small as possible. all it does is reap orphaned processes and start the service manager. copied from EWONTFIX
-
-service manager does all the hard work. this is equivalent to apple launchd before it bacame pid 1 in mac os x
+    - boots processes in parallel. dependencies are managed by third party
+        ipc mechanisms
+    - uses definition files for starting processes
+    - it manages system and user processes
+    - it can be controlled by the administrator and users to stop and
+        restart processes
+    - it has the ability to run processes on loading, on demand and on
+        a set time
+    - monitor and restart long running processes in a flexible way.
+        restarting crashed daemons are throttled and stopped if needed
+    - it is small and modular
+    - can be made robust against buggy system libraries
+    - computes process start time from cron style time specs precisely.
+        this allows the cpu to idle longer
