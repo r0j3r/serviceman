@@ -15,3 +15,14 @@ serviceman
     - can be made robust against buggy system libraries
     - computes process start time from cron style time specs precisely.
         this allows the cpu to idle longer
+
+TODO
+
+    - start time computation from cron style specs
+    - public admin interface
+    - fixing memory leaks
+    - RB Tree replacement for timed start and throttle queue
+
+NICE TO HAVE
+
+    - hash table replacement of child_process circular lists
