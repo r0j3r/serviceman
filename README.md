@@ -12,7 +12,7 @@ serviceman
     - monitor and restart long running processes in a flexible way.
         restarting crashed daemons are throttled and stopped if needed
     - it is small and modular
-    - can be made robust against buggy system libraries
+    - can be made robust against buggy system library updates
     - computes process start time from cron style time specs precisely.
         this allows the cpu to idle longer
 
