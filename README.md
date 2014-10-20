@@ -20,9 +20,10 @@ TODO
 
     - start time computation from cron style specs
     - public admin interface
-    - fixing memory leaks
+    - fix memory leaks
     - RB Tree replacement for timed start and throttle queue
 
 NICE TO HAVE
 
     - hash table replacement of child_process circular lists
+    - a way to handle leap seconds in the internal perpetual calendar [facepalm]

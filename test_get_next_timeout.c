@@ -1,3 +1,4 @@
+#include <string.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <time.h>
@@ -16,10 +17,19 @@ struct time_state
    int yday;
 };
 
-unsigned short mon_end_days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+unsigned short mon_end_days[] = 
+    {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+unsigned short mon_start_ydays[] = 
+    {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+unsigned short leap_mon_end_days[] = 
+    {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+unsigned short leap_mon_start_ydays[] = 
+    {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335};
 int field_cmp(int , int);
 struct timeval * next_timeout(struct timeval *, struct time_state *);
 int day_field_cmp(struct time_state *, struct time_state *);
+int dow(int y, int m, int d);
+int leap_year(int);
 
 int
 main()
@@ -212,75 +222,80 @@ next_timeout(struct timeval * now, struct time_state * n)
 struct timeline_tree_mon
 {
     unsigned char days[32];
-}
+};
 
 struct timeline_tree
 {
     unsigned int year;
-    unsigned int mon[12];
-    unsigned int mday[366];
     unsigned int yday[366];
     unsigned int hour[24];
     unsigned int min[60];
     unsigned int sec[60];
 };
 
-struct timeval *
-next_start(struct timeval * now, struct time_state * n)
+struct timeline_tree timeline;
+
+void
+init_timeline(struct timeline_tree * t_line, struct time_state * n)
 {
-    unsigned int cur pos[6];
-    struct timeline_tree t_line;
-    memset(&pos, 0, sizeof(pos));
+    unsigned int cur[6];
+    memset(&cur, 0, sizeof(cur));
     memset(&t_line, 0, sizeof(t_line));
+    unsigned char days_of_week[366];
+    unsigned short * days_in_month;
+    unsigned char active_mon[12];
 
-    t_line.year = n->year;
+    t_line->year = n->year - 1900;
 
-    if (n->mon >= 0)
+    if(leap_year(n->year))
+        days_in_month = leap_mon_end_days;
+    else
+        days_in_month = mon_end_days;
+
+    if (n->mon > 0)
     {
-        if (n->mon > s->mon)
-            t_line.mon[n->mon] = 1;
+        active_mon[n->mon] = 1; 
     }
     else
     {
-        for(i = s->mon; i < 12; i++)
-        {
-            t_line_mon[i] = 1;
-        }
-    }
+        for(int i = 0; i < 12; i++) active_mon[i] = 1;
+    } 
+
     if (n->mday > 0)
     { 
-        int mon = s->mon;
-        int md = s->mday;
-        for(i = s->yday; i < 366; i++)
+        int mon = 0;
+        int md = 0;
+        for(int i = 0; i < 366; i++)
         {
-            if (md == n->mday)
+            if ((md == n->mday) && (active_mon[mon]))
             {
-                yday[i] = mon;
+                t_line->yday[i] = 1;
             }
             md++;
-            if (md > mon_end_days[s->mon])
+            if (md > days_in_month[mon])
             {
                 mon++; 
                 md = 0;
             }
         }
     }
-    if (n->wday > 0)
+
+    if (n->wday >= 0)
     { 
-        int mon = s->mon;
-        int wd = s->wday
-        int md = s->mday; 
-        for(i = s->yday; i < 366; i++)
+        int mon = 0;
+        int w_d = dow(n->year, 0, 0);
+        int md = 0; 
+        for(int i = 0; i < 366; i++)
         {
-            if (wd == n->wday)
+            if ((w_d == n->wday) && (active_mon[mon]))
             {
-                yday[i] = mon;
+                t_line->yday[i] = 1;
             }
             w_d++;
             if (w_d > 6)
-                w_d = 0
+                w_d = 0;
             md++;
-            if (md > mon_end_days[mon])
+            if (md > days_in_month[mon])
             {
                 mon++; 
                 md = 0;
@@ -288,15 +303,16 @@ next_start(struct timeval * now, struct time_state * n)
         }
     }
 
-    if ((n->wday < 0) && (n-mday < 0))
+    if ((n->wday < 0) && (n->mday < 0))
     {
-        int mon = s->mon;
-        int md = s->mday;
-        for(int i = s->yday; i < 366; i++)
+        int mon = 0;
+        int md = 0;
+        for(int i = 0; i < 366; i++)
         {
-            yday[i] = mon;
+            if (active_mon[mon])
+                t_line->yday[i] = 1;
             md++;
-            if (md > mon_end_days[s->mon])
+            if (md > days_in_month[mon])
             {
                 mon++; 
                 md = 0;
@@ -304,40 +320,106 @@ next_start(struct timeval * now, struct time_state * n)
         }
     }
 
-    if (n->hour > 0)
+    if (n->hour >= 0)
     {
-        t_line.hour[n->hour];
+        t_line->hour[n->hour] = 1;
     }
     else
     {
-        for(i = s->hour; i < 24; i++)
-            t_line.hour = 1;
+        for(int i = 0; i < 24; i++)
+            t_line->hour[i] = 1;
     }
 
-    if (n->min > 0)
+    if (n->min >= 0)
     {
-        t_line.min[n->min] = 1;
+        t_line->min[n->min] = 1;
     }
     else
     {
-        for(i = s->min; i < 60; i++)
-            t_line.min[i] = 1;
+        for(int i = 0; i < 60; i++)
+            t_line->min[i] = 1;
     }
 
     if (n->sec > 0)
     {
-        t_line.sec[n->sec] = 1;
+        t_line->sec[n->sec] = 1;
     }
     else
     {
-        for(i = s->min; i < 60; i++)
-            t_line.sec[i] = 1;
+        for(int i = 0; i < 60; i++)
+            t_line->sec[i] = 1;
     }
-
-        
-      
 }
 
+unsigned char mon_tab[366];
+unsigned char w_days[366];
+
+struct timeval *
+next_start(struct time_state * s, struct time_state * n)
+{
+    struct time_state cur;
+    memset(&cur, 0, sizeof(cur));
+    while(1)
+    {
+        if ((n->year > 0) && (s->year > n->year)) return 0;
+        struct timeline_tree tline;
+        init_timeline(&tline, n);
+        int i;
+    
+        while(1)
+        {
+            for(i = 0; (i < 366) && ((i <= s->yday) || (tline.yday[i] == 0)); i++);
+            if (i >= 366) break;
+            cur.yday = i;
+            while(1)
+            {
+                for(i = 0; (i < 24) && ((i <= s->hour) || (tline.hour[i] == 0)); i++);
+                if (i >= 24) break;
+                cur.hour = i;
+                while(1)
+                {
+                    for(i = 0; (i < 60) && ((i <= s->min) || (tline.min[i] == 0)); i++);
+                    if (i >= 24) break;
+                    cur.min = i;
+                    while(1)
+                    {
+                        for(i = 0; (i < 60) && ((i <= s->sec) || (tline.sec[i] == 0)); i++);
+                        if (i >= 60) break;
+                        else 
+                        {
+                            cur.sec = i;
+                            struct tm t_out; 
+                            t_out.tm_sec = cur.sec;
+                            t_out.tm_min = cur.min;
+                            t_out.tm_hour = cur.hour;
+                            t_out.tm_yday = cur.yday;
+                            t_out.tm_year = cur.year;
+                            struct timeval * tval_out = malloc(sizeof(struct timeval));  
+                            tval_out->tv_sec = mktime(&t_out);
+                            tval_out->tv_usec = 0;
+                            return tval_out; 
+                        }
+                        s->sec++;                        
+                    }
+                    s->min++; 
+                    s->sec = 0;
+                }
+                s->hour++;
+                s->min = 0;
+                s->sec = 0;
+            }
+            s->yday++;
+            s->hour = 0;
+            s->min = 0;
+            s->sec = 0; 
+        }
+        tline.year++;
+        if ((tline.year + 1900) > 2037 ) break; 
+        memset(s, 0, sizeof(s));
+        s->year = tline.year + 1900;
+    }
+    return 0;
+} 
 
 int
 field_cmp(int live, int spec)
@@ -359,4 +441,24 @@ day_field_cmp(struct time_state * live, struct time_state * spec)
             || (spec->mday == live->mday)
             || (spec->wday == live->wday);
     }
+}
+
+int dow(int y, int m, int d)
+{
+    static int t[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+    y -= m < 3;
+    return (y + y/4 - y/100 + y/400 + t[m-1] + d) % 7;
+}
+
+int
+leap_year(int y)
+{
+    if (y % 4)
+        return 0;
+    else if (y % 100)
+        return 1;
+    else if (y % 400)
+        return 0;
+    else
+        return 1;
 }
