@@ -143,6 +143,7 @@ init_timeline(struct timeline_tree * t_line, struct cron_spec * n)
                 {  
                     if (active_mon[mon])
                     {
+                        printf("setting %d %d %d\n", i, md, mon);
                         t_line->yday[i] = 1;
                         t_line->mday[i] = md;
                         t_line->mon[i] = mon; 
@@ -172,6 +173,7 @@ init_timeline(struct timeline_tree * t_line, struct cron_spec * n)
                 {  
                     if (active_mon[mon])
                     {
+                        printf("setting %d %d %d\n", i, md, mon);
                         t_line->yday[i] = 1;
                         t_line->mday[i] = md;
                         t_line->mon[i] = mon; 
@@ -260,7 +262,7 @@ next_start(struct timeval * c, struct cron_spec * n)
         cur.yday = s->yday;
         while(1)
         {
-            for(i = cur.yday; (i < 366) & (tline.yday == 0); i++);
+            for(i = cur.yday; (i < 366) & (tline.yday[i] == 0); i++);
             if (i >= 366) break;
             else if (i > s->yday)
             {
@@ -272,7 +274,7 @@ next_start(struct timeval * c, struct cron_spec * n)
             cur.hour = s->hour;
             while(1)
             {
-                for (i = cur.hour; (i < 24) & (tline.hour == 0); i++);
+                for (i = cur.hour; (i < 24) & (tline.hour[i] == 0); i++);
                 if (i >= 24) break;
                 else if (i > s->hour)
                 {
@@ -283,7 +285,7 @@ next_start(struct timeval * c, struct cron_spec * n)
                 cur.min = s->min;
                 while(1)
                 {
-                    for(i = cur.min; (i < 60) & (tline.min == 0); i++);
+                    for(i = cur.min; (i < 60) & (tline.min[i] == 0); i++);
                     if (i >= 60) break;
                     else if (i > s->min)
                     {
@@ -293,7 +295,7 @@ next_start(struct timeval * c, struct cron_spec * n)
                     cur.sec = s->sec;
                     while(1)
                     {
-                        for(i = cur.sec; (i < 60) & (tline.sec == 0); i++);
+                        for(i = cur.sec; (i < 60) & (tline.sec[i] == 0); i++);
                         if (i >= 60) break;
                         cur.sec = i;
                         if ((cur.year == s->year) & (cur.yday == s->yday) & (cur.hour == s->hour) & (cur.min == s->min) 
