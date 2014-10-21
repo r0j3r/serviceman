@@ -7,16 +7,27 @@
 
 struct time_state
 {
-   int sec;
-   int min;
-   int hour;
-   int mday;
-   int mon;
+   unsigned char sec;
+   unsigned char min;
+   unsigned char hour;
+   unsigned char mday;
+   unsigned char mon;
    int year;
-   int wday;
-   int yday;
+   unsigned char wday;
+   unsigned char yday;
 };
 
+struct cron_spec
+{
+   unsigned char sec[60];
+   unsigned char min[60];
+   unsigned char hour[24];
+   unsigned char mday[32];
+   unsigned char mon[12];
+   int year;
+   unsigned char wday[7];
+   unsigned char yday[366];
+};
 
 unsigned short mon_end_days[] = 
     {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -31,22 +42,17 @@ struct timeval * next_timeout(struct timeval *, struct time_state *);
 int day_field_cmp(struct time_state *, struct time_state *);
 int dow(int y, int m, int d);
 int leap_year(int);
-struct timeval * next_start(struct timeval *, struct time_state *);
+struct timeval * next_start(struct timeval *, struct cron_spec *);
 
 int
 main()
 {
-    struct time_state test_spec = {10, 3, 11, 15, 6, -1, 4, -1};
-    struct timeval now, n;
+    struct cron_spec test_spec = {{10}, {3}, {11}, {15}, {6}, -1, {4}, {-1}};
+    struct timeval now;
 
     gettimeofday(&now, 0);
-    memcpy(&n, &now, sizeof(now));  
-    struct timeval * timeout = next_timeout(&now, &test_spec);
-    for(int i = 0; i < 100; i++)
-    {  
-        timeout = next_timeout(timeout, &test_spec);
-    }
-    timeout = next_start(&n, &test_spec);
+    struct timeval * timeout;
+    timeout = next_start(&now, &test_spec);
     for(int i = 0; i < 1000; i++)
     {  
         struct timeval t; 
@@ -60,81 +66,6 @@ main()
     return 0;
 }
 
-struct timeval *
-next_timeout(struct timeval * now, struct time_state * n)
-{
-    struct time_state * s = malloc(sizeof(*s));
-    
-    unsigned long running = 1;
-
-    struct tm * t_now = gmtime(&now->tv_sec);
-    s->sec = t_now->tm_sec; 
-    s->min = t_now->tm_min; 
-    s->hour = t_now->tm_hour; 
-    s->mday = t_now->tm_mday; 
-    s->mon = t_now->tm_mon; 
-    s->year = t_now->tm_year; 
-    s->wday = t_now->tm_wday; 
-    s->yday = t_now->tm_yday; 
-    running = now->tv_sec;
-    int loop_count = 0;
-    while(running >= 0)
-    {
-        loop_count++;
-        running++;
-        s->sec++;
-        if (s->sec > 59)
-        {
-            s->sec = 0;
-            s->min++;
-            if (s->min > 59)
-            {
-                s->min = 0;
-                s->hour++;
-                if (s->hour > 23)
-                {
-                    s->hour = 0;
-                    s->mday++;
-                    if (s->mday > mon_end_days[s->mon])
-                    {
-                        s->mday = 1;
-                        s->mon++;
-                        if (s->mon > 11)
-                        {
-                            s->mon = 0;
-                        } 
-                    }
-                    s->wday++;
-                    if (s->wday > 6)
-                    {
-                        s->wday = 0;
-                    }
-                    s->yday++; 
-                    if (s->yday > 365)
-                    {
-                        s->yday = 0;
-                        s->year++;
-                    } 
-                }
-            }  
-        }
-        if (day_field_cmp(s, n)
-            && field_cmp(s->sec, n->sec)
-            && field_cmp(s->min, n->min)
-            && field_cmp(s->hour, n->hour)
-            && field_cmp(s->mon, n->mon)
-            && field_cmp(s->year, n->year))
-        {
-            fprintf(stderr, "%d:%d:%d mday %d mon %d year %d wday %d yday %d: %d loops\n", s->sec, s->min, s->hour + 1, 
-                s->mday, s->mon + 1, s->year + 1900, s->wday, s->yday, loop_count);
-            break;
-        }
-    }
-    now->tv_sec = running;
-    now->tv_usec = 0;
-    free(s);
-    return now;  
-}
 
 struct timeline_tree_mon
 {
@@ -144,16 +75,16 @@ struct timeline_tree_mon
 struct timeline_tree
 {
     unsigned int year;
-    unsigned int mday[366];
-    unsigned int mon[366];
-    unsigned int yday[366];
-    unsigned int hour[24];
-    unsigned int min[60];
-    unsigned int sec[60];
+    unsigned char mday[366];
+    unsigned char mon[366];
+    unsigned char yday[366];
+    unsigned char hour[24];
+    unsigned char min[60];
+    unsigned char sec[60];
 };
 
 void
-init_timeline(struct timeline_tree * t_line, struct time_state * n)
+init_timeline(struct timeline_tree * t_line, struct cron_spec * n)
 {
     unsigned int cur[6];
     memset(&cur, 0, sizeof(cur));
@@ -185,16 +116,16 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
 
     memset(active_mon, 0, sizeof(active_mon));
 
-    if (n->mon > 0)
+    if (n->mon[0] > 0)
     {
-        active_mon[n->mon] = 1; 
+        active_mon[n->mon[0]] = 1; 
     }
     else
     {
         for(int i = 0; i < 12; i++) active_mon[i] = 1;
     } 
 
-    if (n->mday > 0)
+    if (n->mday[0] > 0)
     { 
         int mon = 0;
         int md = 1;
@@ -208,7 +139,7 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
             }
             if (mon < 12)
             { 
-                if (md == n->mday)
+                if (md == n->mday[0])
                 {  
                     if (active_mon[mon])
                     {
@@ -221,7 +152,7 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
         }
     }
 
-    if (n->wday >= 0)
+    if (n->wday[0] >= 0)
     { 
         int mon = 0;
         int w_d = dow(t_line->year + 1900, 1, 1);
@@ -237,7 +168,7 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
             }
             if (mon < 12)
             {
-                if (w_d == n->wday)
+                if (w_d == n->wday[0])
                 {  
                     if (active_mon[mon])
                     {
@@ -250,7 +181,7 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
         }
     }
 
-    if ((n->wday < 0) && (n->mday < 0))
+    if ((n->wday[0] < 0) && (n->mday[0] < 0))
     {
         int mon = 0;
         int md = 1;
@@ -269,9 +200,9 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
         }
     }
 
-    if (n->hour >= 0)
+    if (n->hour[0] >= 0)
     {
-        t_line->hour[n->hour] = 1;
+        t_line->hour[n->hour[0]] = 1;
     }
     else
     {
@@ -279,9 +210,9 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
             t_line->hour[i] = 1;
     }
 
-    if (n->min >= 0)
+    if (n->min[0] >= 0)
     {
-        t_line->min[n->min] = 1;
+        t_line->min[n->min[0]] = 1;
     }
     else
     {
@@ -289,9 +220,9 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
             t_line->min[i] = 1;
     }
 
-    if (n->sec > 0)
+    if (n->sec[0] > 0)
     {
-        t_line->sec[n->sec] = 1;
+        t_line->sec[n->sec[0]] = 1;
     }
     else
     {
@@ -301,7 +232,7 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
 }
 
 struct timeval *
-next_start(struct timeval * c, struct time_state * n)
+next_start(struct timeval * c, struct cron_spec * n)
 {
     struct timeline_tree tline;
     memset(&tline, 0, sizeof(tline));
@@ -329,7 +260,7 @@ next_start(struct timeval * c, struct time_state * n)
         cur.yday = s->yday;
         while(1)
         {
-            for(i = cur.yday; (i < 366) & (tline.yday[i] == 0); i++);
+            for(i = cur.yday; (i < 366) & (tline.yday == 0); i++);
             if (i >= 366) break;
             else if (i > s->yday)
             {
@@ -341,7 +272,7 @@ next_start(struct timeval * c, struct time_state * n)
             cur.hour = s->hour;
             while(1)
             {
-                for (i = cur.hour; (i < 24) & (tline.hour[i] == 0); i++);
+                for (i = cur.hour; (i < 24) & (tline.hour == 0); i++);
                 if (i >= 24) break;
                 else if (i > s->hour)
                 {
@@ -352,7 +283,7 @@ next_start(struct timeval * c, struct time_state * n)
                 cur.min = s->min;
                 while(1)
                 {
-                    for(i = cur.min; (i < 60) & (tline.min[i] == 0); i++);
+                    for(i = cur.min; (i < 60) & (tline.min == 0); i++);
                     if (i >= 60) break;
                     else if (i > s->min)
                     {
@@ -362,7 +293,7 @@ next_start(struct timeval * c, struct time_state * n)
                     cur.sec = s->sec;
                     while(1)
                     {
-                        for(i = cur.sec; (i < 60) & (tline.sec[i] == 0); i++);
+                        for(i = cur.sec; (i < 60) & (tline.sec == 0); i++);
                         if (i >= 60) break;
                         cur.sec = i;
                         if ((cur.year == s->year) & (cur.yday == s->yday) & (cur.hour == s->hour) & (cur.min == s->min) 
@@ -404,28 +335,6 @@ next_start(struct timeval * c, struct time_state * n)
     free(s);
     return 0;
 } 
-
-int
-field_cmp(int live, int spec)
-{
-    if (-1 == spec) return 1;
-    else return spec == live;
-}
-
-int
-day_field_cmp(struct time_state * live, struct time_state * spec)
-{
-    if ((spec->yday < 0) && (spec->mday < 0) && (spec->wday < 0))
-    {
-        return 1;
-    } 
-    else
-    {
-        return (spec->yday == live->yday) 
-            || (spec->mday == live->mday)
-            || (spec->wday == live->wday);
-    }
-}
 
 int dow(int y, int m, int d)
 {

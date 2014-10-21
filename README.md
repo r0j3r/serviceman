@@ -22,8 +22,13 @@ TODO
     - public admin interface
     - fix memory leaks
     - RB Tree replacement for timed start and throttle queue
+    - add options for controlling process resource limits
+    - add options for setting user and group ids of processes
+    - multiple date entries in cron spec
+    - run servctl as unpriviledged user
 
 NICE TO HAVE
 
     - hash table replacement of child_process circular lists
     - a way to handle leap seconds in the internal perpetual calendar [facepalm]
+    - inetd-like capabilities 
