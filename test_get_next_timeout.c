@@ -17,6 +17,7 @@ struct time_state
    int yday;
 };
 
+
 unsigned short mon_end_days[] = 
     {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 unsigned short mon_start_ydays[] = 
@@ -30,117 +31,32 @@ struct timeval * next_timeout(struct timeval *, struct time_state *);
 int day_field_cmp(struct time_state *, struct time_state *);
 int dow(int y, int m, int d);
 int leap_year(int);
+struct timeval * next_start(struct timeval *, struct time_state *);
 
 int
 main()
 {
-    struct time_state test_spec = {10, 3, 11, 15, -1, -1, 4, -1};
-    struct timeval now;
-    gettimeofday(&now, 0);  
+    struct time_state test_spec = {10, 3, 11, 15, 6, -1, 4, -1};
+    struct timeval now, n;
+
+    gettimeofday(&now, 0);
+    memcpy(&n, &now, sizeof(now));  
     struct timeval * timeout = next_timeout(&now, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    timeout = next_timeout(timeout, &test_spec);
-    
+    for(int i = 0; i < 100; i++)
+    {  
+        timeout = next_timeout(timeout, &test_spec);
+    }
+    timeout = next_start(&n, &test_spec);
+    for(int i = 0; i < 1000; i++)
+    {  
+        struct timeval t; 
+        if (timeout)
+        {
+            t = *timeout;
+            free(timeout);
+        }
+        timeout = next_start(&t, &test_spec);
+    }
     return 0;
 }
 
@@ -216,6 +132,7 @@ next_timeout(struct timeval * now, struct time_state * n)
     }
     now->tv_sec = running;
     now->tv_usec = 0;
+    free(s);
     return now;  
 }
 
@@ -227,30 +144,46 @@ struct timeline_tree_mon
 struct timeline_tree
 {
     unsigned int year;
+    unsigned int mday[366];
+    unsigned int mon[366];
     unsigned int yday[366];
     unsigned int hour[24];
     unsigned int min[60];
     unsigned int sec[60];
 };
 
-struct timeline_tree timeline;
-
 void
 init_timeline(struct timeline_tree * t_line, struct time_state * n)
 {
     unsigned int cur[6];
     memset(&cur, 0, sizeof(cur));
-    memset(&t_line, 0, sizeof(t_line));
-    unsigned char days_of_week[366];
+
+    int year = t_line->year;
+    memset(t_line, 0, sizeof(*t_line));
+    t_line->year = year;
+
     unsigned short * days_in_month;
     unsigned char active_mon[12];
 
-    t_line->year = n->year - 1900;
+    if (t_line->year == 0)
+    {
+        if (n->year >= 0)
+            t_line->year = n->year - 1900;
+        else
+        {
+            struct timeval now;
+            gettimeofday(&now, 0);
+            struct tm * g = gmtime(&now.tv_sec);
+            t_line->year = g->tm_year;
+        }  
+    }
 
-    if(leap_year(n->year))
+    if(leap_year(t_line->year + 1900))
         days_in_month = leap_mon_end_days;
     else
         days_in_month = mon_end_days;
+
+    memset(active_mon, 0, sizeof(active_mon));
 
     if (n->mon > 0)
     {
@@ -264,41 +197,55 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
     if (n->mday > 0)
     { 
         int mon = 0;
-        int md = 0;
-        for(int i = 0; i < 366; i++)
+        int md = 1;
+
+        for(int i = 0; i < 366; i++,md++)
         {
-            if ((md == n->mday) && (active_mon[mon]))
-            {
-                t_line->yday[i] = 1;
-            }
-            md++;
             if (md > days_in_month[mon])
             {
                 mon++; 
-                md = 0;
+                md = 1;
             }
+            if (mon < 12)
+            { 
+                if (md == n->mday)
+                {  
+                    if (active_mon[mon])
+                    {
+                        t_line->yday[i] = 1;
+                        t_line->mday[i] = md;
+                        t_line->mon[i] = mon; 
+                    }
+                }
+            } 
         }
     }
 
     if (n->wday >= 0)
     { 
         int mon = 0;
-        int w_d = dow(n->year, 0, 0);
-        int md = 0; 
-        for(int i = 0; i < 366; i++)
+        int w_d = dow(t_line->year + 1900, 1, 1);
+        int md = 1; 
+        for(int i = 0; i < 366; i++,w_d++,md++)
         {
-            if ((w_d == n->wday) && (active_mon[mon]))
-            {
-                t_line->yday[i] = 1;
-            }
-            w_d++;
             if (w_d > 6)
                 w_d = 0;
-            md++;
             if (md > days_in_month[mon])
             {
                 mon++; 
-                md = 0;
+                md = 1;
+            }
+            if (mon < 12)
+            {
+                if (w_d == n->wday)
+                {  
+                    if (active_mon[mon])
+                    {
+                        t_line->yday[i] = 1;
+                        t_line->mday[i] = md;
+                        t_line->mon[i] = mon; 
+                    }
+                }
             }
         }
     }
@@ -306,16 +253,18 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
     if ((n->wday < 0) && (n->mday < 0))
     {
         int mon = 0;
-        int md = 0;
+        int md = 1;
         for(int i = 0; i < 366; i++)
         {
             if (active_mon[mon])
+            {
                 t_line->yday[i] = 1;
+            }
             md++;
             if (md > days_in_month[mon])
             {
                 mon++; 
-                md = 0;
+                md = 1;
             }
         }
     }
@@ -351,73 +300,108 @@ init_timeline(struct timeline_tree * t_line, struct time_state * n)
     }
 }
 
-unsigned char mon_tab[366];
-unsigned char w_days[366];
-
 struct timeval *
-next_start(struct time_state * s, struct time_state * n)
+next_start(struct timeval * c, struct time_state * n)
 {
+    struct timeline_tree tline;
+    memset(&tline, 0, sizeof(tline));
+    struct tm * t_now = gmtime(&c->tv_sec);
+    struct time_state * s = malloc(sizeof(*s));
+    s->sec = t_now->tm_sec; 
+    s->min = t_now->tm_min; 
+    s->hour = t_now->tm_hour; 
+    s->mday = t_now->tm_mday; 
+    s->mon = t_now->tm_mon; 
+    s->year = t_now->tm_year; 
+    s->wday = t_now->tm_wday; 
+    s->yday = t_now->tm_yday;
+    tline.year = s->year;  
+
     struct time_state cur;
     memset(&cur, 0, sizeof(cur));
+    cur.year = tline.year; 
     while(1)
     {
-        if ((n->year > 0) && (s->year > n->year)) return 0;
-        struct timeline_tree tline;
         init_timeline(&tline, n);
+        if ((n->year > 0) & (s->year > n->year)) return 0;
         int i;
-    
+
+        cur.yday = s->yday;
         while(1)
         {
-            for(i = 0; (i < 366) && ((i <= s->yday) || (tline.yday[i] == 0)); i++);
+            for(i = cur.yday; (i < 366) & (tline.yday[i] == 0); i++);
             if (i >= 366) break;
-            cur.yday = i;
-            while(1)
+            else if (i > s->yday)
             {
-                for(i = 0; (i < 24) && ((i <= s->hour) || (tline.hour[i] == 0)); i++);
-                if (i >= 24) break;
-                cur.hour = i;
-                while(1)
-                {
-                    for(i = 0; (i < 60) && ((i <= s->min) || (tline.min[i] == 0)); i++);
-                    if (i >= 24) break;
-                    cur.min = i;
-                    while(1)
-                    {
-                        for(i = 0; (i < 60) && ((i <= s->sec) || (tline.sec[i] == 0)); i++);
-                        if (i >= 60) break;
-                        else 
-                        {
-                            cur.sec = i;
-                            struct tm t_out; 
-                            t_out.tm_sec = cur.sec;
-                            t_out.tm_min = cur.min;
-                            t_out.tm_hour = cur.hour;
-                            t_out.tm_yday = cur.yday;
-                            t_out.tm_year = cur.year;
-                            struct timeval * tval_out = malloc(sizeof(struct timeval));  
-                            tval_out->tv_sec = mktime(&t_out);
-                            tval_out->tv_usec = 0;
-                            return tval_out; 
-                        }
-                        s->sec++;                        
-                    }
-                    s->min++; 
-                    s->sec = 0;
-                }
-                s->hour++;
+                s->hour = 0;
                 s->min = 0;
                 s->sec = 0;
             }
-            s->yday++;
-            s->hour = 0;
-            s->min = 0;
-            s->sec = 0; 
+            cur.yday = i;
+            cur.hour = s->hour;
+            while(1)
+            {
+                for (i = cur.hour; (i < 24) & (tline.hour[i] == 0); i++);
+                if (i >= 24) break;
+                else if (i > s->hour)
+                {
+                    s->min = 0;
+                    s->sec = 0;
+                }
+                cur.hour = i;  
+                cur.min = s->min;
+                while(1)
+                {
+                    for(i = cur.min; (i < 60) & (tline.min[i] == 0); i++);
+                    if (i >= 60) break;
+                    else if (i > s->min)
+                    {
+                        s->sec = 0;
+                    } 
+                    cur.min = i;
+                    cur.sec = s->sec;
+                    while(1)
+                    {
+                        for(i = cur.sec; (i < 60) & (tline.sec[i] == 0); i++);
+                        if (i >= 60) break;
+                        cur.sec = i;
+                        if ((cur.year == s->year) & (cur.yday == s->yday) & (cur.hour == s->hour) & (cur.min == s->min) 
+                            & (cur.sec == s->sec))
+                        {
+                            cur.sec++;
+                        }
+                        else
+                        {
+                            struct tm t_out;
+                            memset(&t_out, 0, sizeof(t_out));
+                            t_out.tm_sec = cur.sec;
+                            t_out.tm_min = cur.min; 
+                            t_out.tm_hour = cur.hour;
+                            t_out.tm_mday = tline.mday[cur.yday];
+                            t_out.tm_mon = tline.mon[cur.yday];
+                            t_out.tm_year = tline.year;
+                            printf("found date -- %d %d %d %d:%d:%d -- yday %d\n", tline.year + 1900, tline.mon[cur.yday], 
+                                tline.mday[cur.yday], cur.hour, cur.min, cur.sec, cur.yday); 
+                            struct timeval * tval_out = malloc(sizeof(*tval_out));
+                            tval_out->tv_sec = mktime(&t_out);
+                            tval_out->tv_usec = 0;
+                            free(s); 
+                            return tval_out;
+                        } 
+                    }
+                    cur.min++;
+                }
+                cur.hour++; 
+            }
+            cur.yday++;  
         }
         tline.year++;
-        if ((tline.year + 1900) > 2037 ) break; 
-        memset(s, 0, sizeof(s));
+        if ((tline.year + 1900) > 2037 ) break;
+        cur.year = tline.year; 
+        memset(s, 0, sizeof(*s));
         s->year = tline.year + 1900;
     }
+    free(s);
     return 0;
 } 
 

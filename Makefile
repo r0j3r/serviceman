@@ -25,4 +25,7 @@ test_servctl: parse_def.o protocol.o test_servctl.o message.o notification.o
 test_parse_def: test_parse_def.o parse_def.o 
 test_load_daemons: test_load_daemons.o parse_def.o
 serviceman-shutdown: serviceman-shutdown.o
+
+test_get_next_timeout: CFLAGS=-fPIE -O -g -Wall -std=gnu99 -pedantic -march=native
+test_get_next_timeout: test_get_next_timeout.o
 .PHONY: all
