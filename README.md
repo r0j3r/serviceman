@@ -26,6 +26,7 @@ TODO
     - add options for setting user and group ids of processes
     - multiple date entries in cron spec
     - run servctl as unpriviledged user
+    - proper error notification in the servctl parser
 
 NICE TO HAVE
 
