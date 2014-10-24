@@ -74,6 +74,7 @@ main(int argc, char * argv[])
             if (pwd)
             {
                 fprintf(stderr, "servctl: dropping privs\n");
+                if (-1 == setgid(pwd->pw_gid)) fprintf(stderr, "setgid %d failed %s\n", pwd->pw_gid, strerror(errno));  
                 if (-1 == initgroups(pwd->pw_name, pwd->pw_gid)) fprintf(stderr, "initgroups failed %s\n", strerror(errno));  
                 if (-1 == setuid(pwd->pw_uid)) fprintf(stderr, "setuid %d failed %s\n", pwd->pw_uid, strerror(errno));
             }
@@ -88,6 +89,7 @@ main(int argc, char * argv[])
         pwd = getpwnam("servctld");
         if (pwd)
         {  
+            if (-1 == setgid(pwd->pw_gid)) fprintf(stderr, "setgid %d failed %s\n", pwd->pw_gid, strerror(errno));  
             if (-1 == initgroups(pwd->pw_name, pwd->pw_gid)) fprintf(stderr, "initgroups failed %s\n", strerror(errno));
             if (-1 == setuid(pwd->pw_uid)) fprintf(stderr, "setuid %d failed %s\n", pwd->pw_uid, strerror(errno));
             pwd = 0;
