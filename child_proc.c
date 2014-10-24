@@ -23,18 +23,15 @@ make_child_proc(struct svc_packet * p)
     proc->label = s + p->label;
     if (p->argv_count)
     {
-        proc->argv = malloc(sizeof(long) * p->argv_count);
+        fprintf(stderr, "argv_count %d\n", p->argv_count);
+        proc->argv = malloc(sizeof(long) * (p->argv_count + 1));
         unsigned int * packet_argv = d + p->argv_offset; 
         for(int i = 0; i < p->argv_count; i++)
         {
-            if (packet_argv[i])
-            {   
-                proc->argv[i] = s + packet_argv[i];
-                fprintf(stderr, "%s argv[%d] %s\n", proc->label, i, proc->argv[i]);
-            }
-            else
-                proc->argv[i] = 0; 
+            proc->argv[i] = s + packet_argv[i];
+            fprintf(stderr, "%s argv[%d] %s\n", proc->label, i, proc->argv[i]);
         }
+        proc->argv[p->argv_count] = 0; 
     }
      
     if (p->keepalive_opts_offset)

@@ -300,8 +300,8 @@ main(int argc, char * argv[])
                                     if ((proc->last_restart.tv_sec + 10) < now.tv_sec)
                                     {
                                         gettimeofday(&proc->last_restart, 0);
-                                        fprintf(stderr, "spawn %s\n", proc->exec_file_path);
                                         spawn_proc(proc);
+                                        fprintf(stderr, "spawn %s pid %d\n", proc->exec_file_path, proc->pid);
                                     }
                                     else
                                     {
@@ -324,7 +324,7 @@ main(int argc, char * argv[])
                                 else
                                 {
                                     if (WIFEXITED(status))
-                                        fprintf(stderr, "process %s:%d exited with %d\n", proc->label, proc->pid, WEXITSTATUS(status));
+                                        fprintf(stderr, "process %s:%d %s exited with %d\n", proc->label, proc->pid, proc->exec_file_path, WEXITSTATUS(status));
                                     else if (WIFSIGNALED(status)) 
                                         fprintf(stderr, "process %s:%d signaled with %d\n", proc->label, proc->pid, WTERMSIG(status));
                                 }
@@ -410,7 +410,10 @@ spawn_proc(struct child_process * c)
             open("/dev/tty0", O_WRONLY);
             open("/dev/tty0", O_WRONLY);
         } 
-        execv(c->exec_file_path, c->argv);
+        if (-1 == execv(c->exec_file_path, c->argv))
+        {
+            fprintf(stderr, "execv %s failed: %s\n", c->exec_file_path, strerror(errno)); 
+        }  
         _exit(4);
     }
     else if (-1 == c->pid)

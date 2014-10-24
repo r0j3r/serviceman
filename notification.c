@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <pwd.h>
 #include "definition_packet.h"
 #include "notification.h"
 #include "message.h"
@@ -20,6 +21,7 @@ create_endpoint(char * name)
 {
     int fd;
     struct sockaddr_un endp;
+    pid_t our_pid = getpid();
 
     int try_bind = 3;
     while(try_bind > 0)
@@ -37,13 +39,13 @@ create_endpoint(char * name)
                 }
             }
         }
-        fprintf(stderr, "%s:create_endpoint(), socket fd is %d\n", progname, fd);   
+        fprintf(stderr, "%s:%d create_endpoint(), socket fd is %d\n", progname, our_pid, fd);   
         memset(&endp, 0, sizeof(endp));
         endp.sun_family = AF_UNIX;
         strcpy(endp.sun_path, name);    
         if (-1 == bind(fd, (struct sockaddr *)&endp, sizeof(struct sockaddr_un)))
         {
-            fprintf(stderr, "%s, bind failed %s\n", progname, strerror(errno)); 
+            fprintf(stderr, "%s:%d, bind failed %s\n", progname, our_pid, strerror(errno)); 
             if (EADDRINUSE == errno)
             {
                 unsigned char p[16];
@@ -60,11 +62,11 @@ create_endpoint(char * name)
                         unlink(name);
                         close(fd);
                         try_bind--;
-                        fprintf(stderr, "%s, taking over socket. retrying bind %s\n", progname, name);
+                        fprintf(stderr, "%s:%d, taking over socket. retrying bind %s\n", progname, our_pid, name);
                     }
                     else
                     {
-                        fprintf(stderr, "%s, bind %s failed: %s\n", progname, name, strerror(errno));
+                        fprintf(stderr, "%s:%d, bind %s failed: %s\n", progname, our_pid, name, strerror(errno));
                         try_bind = 0;
                         close(fd);
                         fd = -2;
@@ -85,13 +87,13 @@ create_endpoint(char * name)
                     close(fd);
                     fd = -3;
                     alarm(0);
-                    fprintf(stderr, "%s, failed to bind %s: someone else is using the socket\n", progname, name);
+                    fprintf(stderr, "%s:%d, failed to bind %s: someone else is using the socket\n", progname, our_pid, name);
                 }
             
             }
             else
             {
-                fprintf(stderr, "%s, bind %s failed: %s\n", progname, name, strerror(errno));
+                fprintf(stderr, "%s:%d, bind %s failed: %s\n", progname, our_pid, name, strerror(errno));
                 if (EINTR != errno)
                 {
                     close(fd);
@@ -103,7 +105,7 @@ create_endpoint(char * name)
         }
         else
         {
-            fprintf(stderr, "%s bind successful\n", progname);
+            fprintf(stderr, "%s:%d bind successful\n", progname, our_pid);
             try_bind = 0; 
         }         
     } 
