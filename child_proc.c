@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "definition_packet.h"
+#include "cron_spec.h"
 #include "child_proc.h"
 
 struct child_process *

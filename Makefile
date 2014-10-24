@@ -9,7 +9,7 @@ protocol.o: protocol.h protocol.c
 serv.o: serv.c protocol.h error.h
 servctl: servctl.o protocol.o
 servctl.o: servctl.c protocol.h error.h 
-process-manager: child_proc.c protocol.o process-manager.o notification.o message.o control_proc.o
+process-manager: next_start.o child_proc.o protocol.o process-manager.o notification.o message.o control_proc.o
 volume-manager: volume-manager.o notification.o message.o
 volume-manager.o: notification.h
 notification.o: notification.h

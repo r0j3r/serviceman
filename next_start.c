@@ -4,6 +4,7 @@
 #include <time.h>
 #include <stdlib.h> 
 #include <stdio.h>
+#include "cron_spec.h"
 
 struct time_state
 {
@@ -17,25 +18,6 @@ struct time_state
    unsigned short yday;
 };
 
-struct cron_spec
-{
-   unsigned char sec_flag;
-   unsigned char sec[60];
-   unsigned char min_flag;
-   unsigned char min[60];
-   unsigned char hour_flag;
-   unsigned char hour[24];
-   unsigned char mday_flag;
-   unsigned char mday[32];
-   unsigned char mon_flag;
-   unsigned char mon[12];
-   unsigned char year_flag;
-   int year;
-   unsigned char wday_flag;
-   unsigned char wday[7];
-   unsigned char yday_flag;
-   unsigned char yday[366];
-};
 
 unsigned short mon_end_days[] = 
     {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -45,51 +27,13 @@ unsigned short leap_mon_end_days[] =
     {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 unsigned short leap_mon_start_ydays[] = 
     {0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335};
+
 int field_cmp(int , int);
 struct timeval * next_timeout(struct timeval *, struct time_state *);
 int day_field_cmp(struct time_state *, struct time_state *);
 int dow(int y, int m, int d);
 int leap_year(int);
 struct timeval * next_start(struct timeval *, struct cron_spec *);
-
-int
-main()
-{
-    struct cron_spec test_spec;
-    memset(&test_spec, 0, sizeof(test_spec));
-    test_spec.sec[10] = 1;
-    test_spec.sec_flag = 1;
-    test_spec.min[3] = 1;
-    test_spec.min[45] = 1;
-    test_spec.min_flag = 1;
-    test_spec.hour[11] = 1;
-    test_spec.hour_flag = 1;
-    test_spec.mday[15] = 1;
-    test_spec.mday_flag = 1;
-    test_spec.mon[6] = 1;
-    test_spec.mon[9] = 1;
-    test_spec.mon[2] = 1;
-    test_spec.mon_flag = 1;
-    test_spec.wday[4] = 1;
-    test_spec.wday_flag = 1;
-    struct timeval now;
-
-    gettimeofday(&now, 0);
-    struct timeval * timeout;
-    timeout = next_start(&now, &test_spec);
-    for(int i = 0; i < 1000; i++)
-    {  
-        struct timeval t; 
-        if (timeout)
-        {
-            t = *timeout;
-            free(timeout);
-        }
-        timeout = next_start(&t, &test_spec);
-    }
-    return 0;
-}
-
 
 struct timeline_tree_mon
 {
@@ -354,8 +298,6 @@ next_start(struct timeval * c, struct cron_spec * n)
                         }
                         else
                         {
-                            printf("found date -- %d %d %d %d:%d:%d -- yday %d\n", tline.year + 1900, tline.mon[cur.yday], 
-                                tline.mday[cur.yday], cur.hour, cur.min, cur.sec, cur.yday); 
                             free(s); 
                             return tval_out;
                         } 

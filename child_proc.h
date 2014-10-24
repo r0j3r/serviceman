@@ -10,6 +10,7 @@ struct child_process
     unsigned int throttle_count;
     struct timeval last_restart;
     unsigned char * data_buf;
+    struct cron_spec * start_calendar_interval;
 };
 
 struct child_process * make_child_proc(struct svc_packet *);
