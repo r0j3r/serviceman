@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <pwd.h>
+#include <grp.h>
 #include "definition_packet.h"
 #include "notification.h"
 #include "servctl.h"
@@ -52,26 +53,6 @@ int we_are_root = 0;
 int
 main(int argc, char * argv[])
 {
-    struct passwd * pwd = 0;
-    if (argc == 2)
-    {
-        if (argv[1])
-        {
-            errno = 0;
-            pwd = getpwnam(argv[1]);
-            if (pwd)
-            {
-                fprintf(stderr, "servctl: dropping privs\n");
-                setuid(pwd->pw_uid);
-                setgid(pwd->pw_gid);  
-            }
-            else
-            {
-                fprintf(stderr, "failed to getpwnam: %s\n", strerror(errno));
-            } 
-        }
-    }
-
     struct sigaction sig;
     memset(&sig, 0, sizeof(sig));
     sigfillset(&sig.sa_mask);
@@ -82,6 +63,40 @@ main(int argc, char * argv[])
     sigfillset(&sig.sa_mask);
     sig.sa_handler = alarm_handler;
     sigaction(SIGALRM, &sig, 0);
+
+    struct passwd * pwd = 0;
+    if (argc == 2)
+    {
+        if (argv[1])
+        {
+            errno = 0;
+            pwd = getpwnam(argv[1]);
+            if (pwd)
+            {
+                fprintf(stderr, "servctl: dropping privs\n");
+                if (-1 == initgroups(pwd->pw_name, pwd->pw_gid)) fprintf(stderr, "initgroups failed %s\n", strerror(errno));  
+                if (-1 == setuid(pwd->pw_uid)) fprintf(stderr, "setuid %d failed %s\n", pwd->pw_uid, strerror(errno));
+            }
+            else
+            {
+                fprintf(stderr, "getpwnam user %s failed: %s\n", argv[1], strerror(errno));
+            } 
+        }
+    }
+    else
+    {
+        pwd = getpwnam("servctld");
+        if (pwd)
+        {  
+            if (-1 == initgroups(pwd->pw_name, pwd->pw_gid)) fprintf(stderr, "initgroups failed %s\n", strerror(errno));
+            if (-1 == setuid(pwd->pw_uid)) fprintf(stderr, "setuid %d failed %s\n", pwd->pw_uid, strerror(errno));
+            pwd = 0;
+        }
+        else
+        {
+            fprintf(stderr, "getpwnam servctld failed: %s\n", strerror(errno));
+        }   
+    }
 
     if (pwd)
     {
@@ -107,20 +122,17 @@ main(int argc, char * argv[])
 
     fprintf(stderr, "test_servctl starting\n");
    
-    sendto(sd, SERVCTL_CHECKIN, 16, 0, (struct sockaddr *)&procman_sock, 
-        sizeof(procman_sock.sun_family) + strlen(procman_sock.sun_path)); //process-manager
-    fprintf(stderr, "test_servctl: sent checkin\n");
+    if (-1 == sendto(sd, SERVCTL_CHECKIN, 16, 0, (struct sockaddr *)&procman_sock, 
+        sizeof(procman_sock.sun_family) + strlen(procman_sock.sun_path))) //process-manager
+        fprintf(stderr, "test_servctl: failed sendto servctl checkin: %s\n", strerror(errno));
+
     unsigned char data[1024];
     size_t len = 1024;
     if (-1 == recvfrom(sd, data, len, 0, (struct sockaddr *)&procman_sock, &procman_socklen)) //process-manager
         fprintf(stderr, "test_servctl: failed recieve ack: %s\n", strerror(errno));
-    else
-        fprintf(stderr, "test_servctl: recieved ack\n");
 
     if (-1 == sendto(sd, SERVCTL_ACK_ACK, 16, 0, (struct sockaddr *)&procman_sock, procman_socklen)) //process-manager
         fprintf(stderr, "test_servctl: failed to send ack ack: %s\n", strerror(errno));
-    else
-        fprintf(stderr, "test_servctl: sent ack ack\n");
 
     if (we_are_root)
         load_daemons(sd, &procman_sock, procman_socklen);
@@ -143,14 +155,11 @@ send_servctl_packet(int sd, struct svc_packet * p, struct sockaddr_un * u, sockl
 {
     struct request * req = create_servctl_request(CREATE, PROC_LIST_RESOURCE, p);
 
-
     struct message * m = create_message((unsigned char *)req, sizeof(*req) + req->data_len);
     free(req);
  
     if (-1 == sendto(sd, m, sizeof(*m) + m->payload_len, 0, (struct sockaddr *)u, l)) //process-manager
-        fprintf(stderr, "test_servctl: failed to send packet: %s\n", strerror(errno));
-    else
-        fprintf(stderr, "test_servctl: sent packet\n");
+        fprintf(stderr, "servctld: failed to send servctl packet: %s\n", strerror(errno));
     free(m);
     return 0;
 }
@@ -176,7 +185,6 @@ load_daemons(int sd, struct sockaddr_un * u, socklen_t l)
         char path[FILENAME_MAX];
         struct stat st_buf;
 
-        printf("%s\n", service->d_name);
         strcpy(path, "/etc/daemons/");
         strcat(path, service->d_name);
         if (stat(path, &st_buf) == 0)
@@ -184,7 +192,6 @@ load_daemons(int sd, struct sockaddr_un * u, socklen_t l)
             if (S_ISREG(st_buf.st_mode))
             { 
                 p = parse_def_file(path);
-                printf("sending packet\n");
                 send_servctl_packet(sd, p, u, l);
             }
         }
@@ -214,7 +221,6 @@ load_agents(int sd, struct sockaddr_un * u, socklen_t l)
         char path[FILENAME_MAX];
         struct stat st_buf;
 
-        printf("%s\n", service->d_name);
         strcpy(path, "/etc/agents/");
         strcat(path, service->d_name);
         if (stat(path, &st_buf) == 0)
@@ -222,7 +228,6 @@ load_agents(int sd, struct sockaddr_un * u, socklen_t l)
             if (S_ISREG(st_buf.st_mode))
             { 
                 p = parse_def_file(path);
-                printf("sending packet\n");
                 send_servctl_packet(sd, p, u, l);
             }
         }

@@ -111,7 +111,7 @@ launch_control_proc(struct passwd * pwd, char * socket_path, struct sockaddr_un 
         else
             argv[1] = 0;
 
-        if (-1 == execv("/lib/process-manager/servctl", argv))
+        if (-1 == execv("/lib/process-manager/servctld", argv))
             fprintf(stderr, "execv failed: %s\n", strerror(errno));
         _exit(4);
     }

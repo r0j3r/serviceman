@@ -105,7 +105,6 @@ create_endpoint(char * name)
         }
         else
         {
-            fprintf(stderr, "%s:%d bind successful\n", progname, our_pid);
             try_bind = 0; 
         }         
     } 

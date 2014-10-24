@@ -15,6 +15,7 @@
 #include <signal.h>
 #include <mntent.h>
 #include <pwd.h>
+#include <grp.h>
 #include "error.h"
 #include "protocol.h"
 #include "servctl.h"
@@ -161,18 +162,31 @@ main(int argc, char * argv[])
                     pause();
             }
             fprintf(stderr, "we are root\n");
-            if (-1 == mkdir("/run/process-manager", 0700))
+            if (-1 == mkdir("/run/process-manager", 0770))
             {
                 fprintf(stderr, "failed to make dir /run/process-manager: %s\n", strerror(errno));
                 while(1)
                     pause();
             }
+            struct group * g = getgrnam("process-manager");
+            if (g)
+            {
+                if (-1 == chown("/run/process-manager", -1, g->gr_gid))
+                    fprintf(stderr, "chown gid %d failed: %s\n", g->gr_gid, strerror(errno));
+                if (-1 == chmod("/run/process-manager", S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP))
+                    fprintf(stderr, "chmod failed: %s\n", strerror(errno));
+            }
+            else
+            {
+                fprintf(stderr, "getgrnam process-manager failed: %s\n", strerror(errno));
+            } 
         }
     }
     else
     {
         mkdir(process_manager_run_dir, 0700);
-        chown(process_manager_run_dir, pwd->pw_uid, pwd->pw_gid);
+        if (-1 == chown(process_manager_run_dir, pwd->pw_uid, pwd->pw_gid))
+            fprintf(stderr, "chown failed: %s\n", strerror(errno));
     } 
 
     running = malloc(sizeof(*running));
@@ -261,6 +275,8 @@ main(int argc, char * argv[])
                             child_pid = -1;
                             if (proc)
                             {
+                                kill(-proc->pid, SIGTERM);
+
                                 restart_proc = 0; 
                                 if (proc->keepalive_opts)
                                 {
@@ -352,9 +368,13 @@ main(int argc, char * argv[])
     struct child_process * v = running->next;
     while(running != v)
     {
-        if (-1 == kill(v->pid, SIGTERM))
+        if (-1 == kill(-v->pid, SIGTERM))
         {
-            fprintf(stderr, "process-manager: kill failed: %s\n", strerror(errno));
+            fprintf(stderr, "process-manager: kill %d failed: %s\n", -v->pid, strerror(errno));
+            if (-1 == kill(v->pid, SIGTERM))
+            {
+                fprintf(stderr, "process-manager: kill %d failed: %s\n", v->pid, strerror(errno));
+            }
         }
         v = v->next;
     }

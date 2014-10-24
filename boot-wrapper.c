@@ -21,7 +21,6 @@ main(int argc, char * argv[])
 {
     pid_t our_pid = getpid();
 
-    fprintf(stderr, "boot-wrapper %d starting...\n", our_pid);
     char * endp_name = create_endp_name();
     char * endp_path = create_endp_path(endp_name);
 
@@ -60,15 +59,15 @@ main(int argc, char * argv[])
     {
         fprintf(stderr, "endp is %d\n", endp); 
         if (endp == -1)
-            exit(3);
+            exit(13);
         else if (endp == -2)
-            exit(4);
+            exit(14);
         else if (endp == -3)
-            exit(5);
+            exit(15);
         else if (endp == -4)
-            exit(6);
+            exit(16);
         else
-           exit(7);
+           exit(17);
     }
 }
 
