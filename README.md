@@ -18,13 +18,15 @@ serviceman
 
 TODO
 
-     - public admin interface
+    - public admin interface
     - fix memory leaks
     - RB Tree replacement for timed start and throttle queue
     - add options for controlling process resource limits
     - add options for setting user and group ids of processes
-    - multiple date entries in cron spec
+    - extend servctl parser to handle start calendar time
     - proper error notification in the servctl parser
+    - add options to wait for different types of notifications to  boot-wrapper.
+        currently we only handle root fs availability
 
 NICE TO HAVE
 
