@@ -5,15 +5,7 @@ LDFLAGS=-fPIE -O2 -g -Wall -std=gnu99 -pedantic -march=native
 
 all: boot-wrapper process-manager serviceman-shutdown early-boot-arbitrator pid1 volume-manager servctld
 
-serv: serv.o protocol.o
-
 protocol.o: protocol.h protocol.c
-
-serv.o: serv.c protocol.h error.h
-
-servctl: servctl.o protocol.o
-
-servctl.o: servctl.c protocol.h error.h 
 
 process-manager: next_start.o child_proc.o protocol.o process-manager.o notification.o message.o control_proc.o
 
