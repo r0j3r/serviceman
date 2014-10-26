@@ -14,3 +14,4 @@ struct child_process
 };
 
 struct child_process * make_child_proc(struct svc_packet *);
+void destroy_proc_struct(struct child_process *); 

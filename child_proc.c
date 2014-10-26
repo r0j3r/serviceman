@@ -47,3 +47,11 @@ make_child_proc(struct svc_packet * p)
     proc->login_session = p->login_session;
     return proc;
 }
+
+void
+destroy_proc_struct(struct child_process * c)
+{ 
+    if (c->argv) free(c->argv);
+    if (c->data_buf) free(c->data_buf);
+    free(c);
+}

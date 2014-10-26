@@ -334,6 +334,7 @@ main(int argc, char * argv[])
                                         else
                                         {
                                             fprintf(stderr, "%s exceeded throttle limit\n", proc->label);
+                                            destroy_proc_struct(proc);
                                         } 
                                     } 
                                 }
@@ -343,6 +344,7 @@ main(int argc, char * argv[])
                                         fprintf(stderr, "process %s:%d %s exited with %d\n", proc->label, proc->pid, proc->exec_file_path, WEXITSTATUS(status));
                                     else if (WIFSIGNALED(status)) 
                                         fprintf(stderr, "process %s:%d signaled with %d\n", proc->label, proc->pid, WTERMSIG(status));
+                                    destroy_proc_struct(proc);
                                 }
                             }
                         }
@@ -370,7 +372,7 @@ main(int argc, char * argv[])
     {
         if (-1 == kill(-v->pid, SIGTERM))
         {
-            fprintf(stderr, "process-manager: kill %d failed: %s\n", -v->pid, strerror(errno));
+            fprintf(stderr, "process-manager: kill process group %d failed: %s\n", -v->pid, strerror(errno));
             if (-1 == kill(v->pid, SIGTERM))
             {
                 fprintf(stderr, "process-manager: kill %d failed: %s\n", v->pid, strerror(errno));
@@ -380,7 +382,7 @@ main(int argc, char * argv[])
     }
     kill(ctl_pid, SIGTERM);
 
-    alarm(10);
+    alarm(5);
 
     while (any_child_exists)
     {
@@ -410,7 +412,6 @@ main(int argc, char * argv[])
     unlink(process_manager_socket_path);
     return 0;
 }
-
 
 int
 spawn_proc(struct child_process * c)

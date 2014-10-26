@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pwd.h>
+#include <stdlib.h>
 #include "definition_packet.h"
 #include "notification.h"
 #include "message.h"
@@ -169,6 +170,7 @@ send_notify(int fd, const unsigned char resource_id[16], unsigned char endp_name
     if (-1 == read(fd, data, 4096))
     {
         fprintf(stderr, "read failed: %s\n", strerror(errno));
-    } 
+    }
+    free(r); 
     return 0;
 }

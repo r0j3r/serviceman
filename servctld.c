@@ -195,6 +195,7 @@ load_daemons(int sd, struct sockaddr_un * u, socklen_t l)
             { 
                 p = parse_def_file(path);
                 send_servctl_packet(sd, p, u, l);
+                free(p);
             }
         }
     }
@@ -231,6 +232,7 @@ load_agents(int sd, struct sockaddr_un * u, socklen_t l)
             { 
                 p = parse_def_file(path);
                 send_servctl_packet(sd, p, u, l);
+                free(p);
             }
         }
     }
