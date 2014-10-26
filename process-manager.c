@@ -23,6 +23,7 @@
 #include "definition_packet.h"
 #include "notification.h"
 #include "child_proc.h"
+#include "cron_spec.h"
 
 static const unsigned char SUCCESSFUL_EXIT = 1;
 char * progname = "process-manager";
@@ -279,8 +280,15 @@ main(int argc, char * argv[])
                             {
                                 kill(-proc->pid, SIGTERM);
 
-                                restart_proc = 0; 
-                                if (proc->keepalive_opts)
+                                restart_proc = 0;
+                                if (proc->start_calendar_interval)
+                                {
+                                    struct timeval now;
+                                    gettimeofday(&now, 0); 
+                                    proc->last_restart = *(next_start(&now, proc->start_calendar_interval));
+                                    queue_proc(proc);
+                                } 
+                                else if (proc->keepalive_opts)
                                 {
                                     int i = 0;
                                     while(proc->keepalive_opts[i])
@@ -580,9 +588,19 @@ handle_start_proc(struct request * r)
     } 
     else
     {
-        fprintf(stderr, "starting proc %s\n", c->label);
-        gettimeofday(&c->last_restart, 0);
-        spawn_proc(c);
+        if (c->start_calendar_interval)
+        {
+            struct timeval now;
+            gettimeofday(&now, 0); 
+            c->last_restart = *(next_start(&now, c->start_calendar_interval));
+            queue_proc(c);
+        }
+        else
+        {
+            fprintf(stderr, "starting proc %s\n", c->label);
+            gettimeofday(&c->last_restart, 0);
+            spawn_proc(c);
+        }
         return 0;
     }
 }

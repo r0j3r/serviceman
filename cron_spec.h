@@ -17,3 +17,5 @@ struct cron_spec
    unsigned char yday_flag;
    unsigned char yday[366];
 };
+
+struct timeval * next_start(struct timeval *, struct cron_spec *);
