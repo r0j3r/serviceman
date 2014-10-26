@@ -11,6 +11,8 @@ struct child_process
     struct timeval last_restart;
     unsigned char * data_buf;
     struct cron_spec * start_calendar_interval;
+    char * username;
+    char * groupname;
 };
 
 struct child_process * make_child_proc(struct svc_packet *);

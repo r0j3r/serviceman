@@ -8,6 +8,8 @@ all: boot-wrapper process-manager serviceman-shutdown early-boot-arbitrator pid1
 protocol.o: protocol.h protocol.c
 
 process-manager: next_start.o child_proc.o protocol.o process-manager.o notification.o message.o control_proc.o
+child_proc.o: child_proc.h
+process-manager.o: child_proc.h
 
 volume-manager: volume-manager.o notification.o message.o
 

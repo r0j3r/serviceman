@@ -27,6 +27,7 @@ TODO
     - proper error notification in the servctl parser
     - add options to wait for different types of notifications to  boot-wrapper.
         currently we only handle root fs availability
+    - launch layer 0 from servctl instead of the process-manager
 
 NICE TO HAVE
 

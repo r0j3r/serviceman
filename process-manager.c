@@ -32,7 +32,8 @@ struct child_process * waiting;
 struct child_process * inactive;
 
 char * arbitrator_argv[] = {"early-boot-arbitrator", 0};
-struct child_process arbitrator = {0, 0, "/sbin/early-boot-arbitrator", arbitrator_argv, 0, "arbitrator", 0, 0, {0, 0}, 0};
+struct child_process arbitrator = {0, 0, "/sbin/early-boot-arbitrator", arbitrator_argv, 0, 
+    "arbitrator", 0, 0, {0, 0}, 0, 0, "nobody", 0};
 
 int setctty(char *);
 unsigned char any_child_exists(void);
@@ -173,7 +174,8 @@ main(int argc, char * argv[])
             {
                 if (-1 == chown("/run/process-manager", -1, g->gr_gid))
                     fprintf(stderr, "chown gid %d failed: %s\n", g->gr_gid, strerror(errno));
-                if (-1 == chmod("/run/process-manager", S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP))
+                if (-1 == chmod("/run/process-manager", S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP
+                    |S_IXGRP))
                     fprintf(stderr, "chmod failed: %s\n", strerror(errno));
             }
             else
@@ -419,17 +421,40 @@ spawn_proc(struct child_process * c)
     c->pid = fork();
     if (0 == c->pid)
     {
-        if (c->login_session)
+        if (we_are_root)
         {
-            close(0);
-            close(1);
-            close(2);
+            if (c->login_session)
+            {    
+                close(0);
+                close(1);
+                close(2);
 
-            setsid();
+                setsid();
 
-            open("/dev/tty0", O_RDONLY);
-            open("/dev/tty0", O_WRONLY);
-            open("/dev/tty0", O_WRONLY);
+                open("/dev/tty0", O_RDONLY);
+                open("/dev/tty0", O_WRONLY);
+                open("/dev/tty0", O_WRONLY);
+            }
+            if (c->groupname)
+            {
+                struct group * g = getgrnam(c->groupname);
+                if (g)
+                {
+                    if (-1 == setgid(g->gr_gid))
+                        fprintf(stderr, "setgid failed\n");
+                }
+            }      
+            if (c->username)
+            {
+                struct passwd * p = getpwnam(c->username);
+                if (p)
+                {
+                    initgroups(p->pw_name, p->pw_gid);
+                    if (!c->groupname)
+                        setgid(p->pw_gid);
+                    setuid(p->pw_uid);
+                } 
+            }
         } 
         if (-1 == execv(c->exec_file_path, c->argv))
         {
