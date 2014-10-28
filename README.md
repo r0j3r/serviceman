@@ -34,3 +34,10 @@ NICE TO HAVE
     - hash table replacement of child_process circular lists
     - a way to handle leap seconds in the internal perpetual calendar [facepalm]
     - inetd-like capabilities 
+
+Build
+    
+    - how to compile
+        mkdir build
+        cd build 
+        make -f ../Makefile 
