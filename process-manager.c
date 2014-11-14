@@ -24,6 +24,7 @@
 #include "notification.h"
 #include "child_proc.h"
 #include "cron_spec.h"
+#include "rbtree.h"
 
 static const unsigned char SUCCESSFUL_EXIT = 1;
 char * progname = "process-manager";

@@ -6,7 +6,7 @@ LDFLAGS= -flto -fuse-linker-plugin -fPIE -O2 -g -Wall -std=gnu99 -pedantic -marc
 
 all: boot-wrapper process-manager serviceman-shutdown early-boot-arbitrator pid1 volume-manager servctld
 
-process-manager: next_start.o child_proc.o protocol.o process-manager.o notification.o message.o control_proc.o
+process-manager: rbtree.o next_start.o child_proc.o protocol.o process-manager.o notification.o message.o control_proc.o
 
 volume-manager: volume-manager.o notification.o message.o
 
