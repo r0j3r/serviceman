@@ -27,13 +27,13 @@ main(int argc, char * argv[])
     {
         fprintf(stderr, "process-manager: kill failed: %s\n", strerror(errno));
     }
-    sleep(1);
+
     fprintf(stderr, "sending SIGKILL to all processes...\n");
     if (-1 == kill(-1, SIGKILL))
     {
         fprintf(stderr, "process-manager: kill failed: %s\n", strerror(errno));
     }
-    sleep(1);
+
     if (-1 == mount("", "/", 0, MS_REMOUNT | MS_RDONLY, 0))
     { 
         fprintf(stderr, "failed to remount root read only: %s\n", strerror(errno));
@@ -51,7 +51,6 @@ main(int argc, char * argv[])
         else
         {
             kill(-1, SIGKILL); 
-            sleep(1);
             root_busy--;
             fprintf(stderr, "process-manager: retrying unmount\n");
         }
@@ -60,7 +59,7 @@ main(int argc, char * argv[])
     if (-1 == umount("/proc"))
     { 
         fprintf(stderr, "failed to umount /proc: %s\n", strerror(errno));
-        sleep(3);
+        sleep(1);
     }
 
     if (-1 == umount("/dev"))
@@ -69,14 +68,14 @@ main(int argc, char * argv[])
         if (-1 == mount("", "/dev", 0, MS_REMOUNT | MS_RDONLY, 0))
         { 
             fprintf(stderr, "failed to remount /dev read only: %s\n", strerror(errno));
-            sleep(3);
+            sleep(1);
         }
     }
 
     if (-1 == mount("", "/", 0, MS_REMOUNT | MS_RDONLY, 0))
     { 
         fprintf(stderr, "failed to remount root read only: %s\n", strerror(errno));
-        sleep(3);
+        sleep(1);
     }
 
     sync();
@@ -84,7 +83,7 @@ main(int argc, char * argv[])
     if (-1 == umount("/"))
     { 
         fprintf(stderr, "failed to umount /: %s\n", strerror(errno));
-        sleep(3);
+        sleep(1);
     }
 
     reboot(reboot_cmd); 
@@ -135,10 +134,10 @@ unmounted_all(void)
         else
         {
             fprintf(stderr, "failed to open /proc/mounts: %s...\n", strerror(errno));
-            sleep(10);  
+            sleep(1);  
         } 
         fprintf(stderr, "to_unmount = %d, unmounted = %d\n", to_unmount, unmounted);
-        sleep(3);
+        sleep(1);
         if (to_unmount == unmounted)
             tries = 0;
         else
