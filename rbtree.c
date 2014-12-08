@@ -1,23 +1,28 @@
-int jsw_remove ( struct jsw_tree *tree, int data )
- {
-   if ( tree->root != NULL ) {
-     struct jsw_node head = {0}; /* False tree root */
-     struct jsw_node *q, *p, *g; /* Helpers */
-     struct jsw_node *f = NULL;  /* Found item */
+#include "rbtree.h"
+
+int is_red(struct node * n) {
+    return n->flags == 1;
+}
+
+int jsw_remove ( struct tree *tree, int data ) {
+   if ( tree->root != 0) {
+     struct node head = {0}; /* False tree root */
+     struct node *q, *p, *g; /* Helpers */
+     struct node *f = 0;  /* Found item */
      int dir = 1;
  
      /* Set up helpers */
      q = &head;
-     g = p = NULL;
-     q->link[1] = tree->root;
+     g = p = 0;
+     q->c[1] = tree->root;
  
      /* Search and push a red down */
-     while ( q->link[dir] != NULL ) {
+     while ( q->c[dir] != 0 ) {
        int last = dir;
  
        /* Update helpers */
        g = p, p = q;
-       q = q->link[dir];
+       q = q->c[dir];
        dir = q->data < data;
  
        /* Save found node */
@@ -25,31 +30,31 @@ int jsw_remove ( struct jsw_tree *tree, int data )
          f = q;
  
        /* Push the red node down */
-       if ( !is_red ( q ) && !is_red ( q->link[dir] ) ) {
-         if ( is_red ( q->link[!dir] ) )
-           p = p->link[last] = jsw_single ( q, dir );
-         else if ( !is_red ( q->link[!dir] ) ) {
-           struct jsw_node *s = p->link[!last];
+       if ( !is_red ( q ) && !is_red ( q->c[dir] ) ) {
+         if ( is_red ( q->c[!dir] ) )
+           p = p->c[last] = jsw_single ( q, dir );
+         else if ( !is_red ( q->c[!dir] ) ) {
+           struct node *s = p->c[!last];
  
-           if ( s != NULL ) {
-             if ( !is_red ( s->link[!last] ) && !is_red ( s->link[last] ) ) {
+           if ( s != 0 ) {
+             if ( !is_red ( s->c[!last] ) && !is_red ( s->c[last] ) ) {
                /* Color flip */
-               p->red = 0;
-               s->red = 1;
-               q->red = 1;
+               p->flags = 0;
+               s->flags = 1;
+               q->flags = 1;
              }
              else {
-               int dir2 = g->link[1] == p;
+               int dir2 = g->c[1] == p;
  
-               if ( is_red ( s->link[last] ) )
-                 g->link[dir2] = jsw_double ( p, last );
-               else if ( is_red ( s->link[!last] ) )
-                 g->link[dir2] = jsw_single ( p, last );
+               if ( is_red ( s->c[last] ) )
+                 g->c[dir2] = jsw_double ( p, last );
+               else if ( is_red ( s->c[!last] ) )
+                 g->c[dir2] = jsw_single ( p, last );
  
                /* Ensure correct coloring */
-               q->red = g->link[dir2]->red = 1;
-               g->link[dir2]->link[0]->red = 0;
-               g->link[dir2]->link[1]->red = 0;
+               q->flags = g->c[dir2]->flags = 1;
+               g->c[dir2]->c[0]->flags = 0;
+               g->c[dir2]->c[1]->flags = 0;
              }
            }
          }
@@ -57,65 +62,65 @@ int jsw_remove ( struct jsw_tree *tree, int data )
      }
  
      /* Replace and remove if found */
-     if ( f != NULL ) {
+     if ( f != 0 ) {
        f->data = q->data;
-       p->link[p->link[1] == q] =
-         q->link[q->link[0] == NULL];
+       p->c[p->c[1] == q] =
+         q->c[q->c[0] == 0];
        free ( q );
      }
  
      /* Update root and make it black */
-     tree->root = head.link[1];
-     if ( tree->root != NULL )
-       tree->root->red = 0;
+     tree->root = head.c[1];
+     if ( tree->root != 0 )
+       tree->root->flags = 0;
    }
  
    return 1;
  }
 
-int jsw_insert ( struct jsw_tree *tree, int data )
+int jsw_insert ( struct tree *tree, int data )
 {
-   if ( tree->root == NULL ) {
+   if ( tree->root == 0 ) {
      /* Empty tree case */
     tree->root = make_node ( data );
-    if ( tree->root == NULL )
+    if ( tree->root == 0 )
        return 0;
    }
    else {
-     struct jsw_node head = {0}; /* False tree root */
+     struct node head = {0}; /* False tree root */
  
-     struct jsw_node *g, *t;     /* Grandparent & parent */
-     struct jsw_node *p, *q;     /* Iterator & parent */
+     struct node *g, *t;     /* Grandparent & parent */
+     struct node *p, *q;     /* Iterator & parent */
      int dir = 0, last;
  
      /* Set up helpers */
      t = &head;
-     g = p = NULL;
-     q = t->link[1] = tree->root;
+     g = p = 0;
+     q = t->c[1] = tree->root;
  
      /* Search down the tree */
      for ( ; ; ) {
-       if ( q == NULL ) {
+       if ( q == 0 ) {
          /* Insert new node at the bottom */
-         p->link[dir] = q = make_node ( data );
-         if ( q == NULL )
+         p->c[dir] = q = make_node ( data );
+         if ( q == 0 )
            return 0;
        }
-       else if ( is_red ( q->link[0] ) && is_red ( q->link[1] ) ) {
+       else if ( is_red ( q->c[0] ) && is_red ( q->c[1] ) ) {
          /* Color flip */
-         q->red = 1;
-         q->link[0]->red = 0;
-         q->link[1]->red = 0;
+         q->flags = 1;
+         q->c[0]->flags = 0;
+         q->c[1]->flags = 0;
        }
  
        /* Fix red violation */
        if ( is_red ( q ) && is_red ( p ) ) {
-         int dir2 = t->link[1] == g;
+         int dir2 = t->c[1] == g;
  
-         if ( q == p->link[last] )
-           t->link[dir2] = jsw_single ( g, !last );
+         if ( q == p->c[last] )
+           t->c[dir2] = jsw_single ( g, !last );
          else
-           t->link[dir2] = jsw_double ( g, !last );
+           t->c[dir2] = jsw_double ( g, !last );
        }
  
       /* Stop if found */
@@ -126,18 +131,18 @@ int jsw_insert ( struct jsw_tree *tree, int data )
        dir = q->data < data;
  
        /* Update helpers */
-       if ( g != NULL )
+       if ( g != 0 )
          t = g;
        g = p, p = q;
-       q = q->link[dir];
+       q = q->c[dir];
      }
  
      /* Update root */
-     tree->root = head.link[1];
+     tree->root = head.c[1];
    }
 
    /* Make root black */
-   tree->root->red = 0;
+   tree->root->flags = 0;
  
    return 1;
 }
